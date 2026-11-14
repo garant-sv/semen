@@ -2908,3 +2908,40 @@ button.card:active {
     font-size: 18px;
   }
 }
+
+/* ------------------------------------------------------------------ 0.8: Listik reads aloud */
+.speak {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px 0 -8px 8px;
+  padding: 0;
+  vertical-align: middle;
+  border-radius: 50%;
+  border: 2px solid var(--cream-3);
+  background: #fff;
+  color: var(--green);
+  cursor: pointer;
+  box-shadow: 0 2px 0 var(--cream-3);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.speak svg {
+  width: 22px;
+  height: 22px;
+}
+
+.speak:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+.quest-avatar .speak {
+  display: grid;
+  margin: 6px 0 0 -1px;
+}
+
+.quest-card.collapsed .quest-avatar .speak {
+  display: none;
+}

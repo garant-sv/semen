@@ -564,3 +564,66 @@ test('large text: on for 2 class, off for 4 class, switch in Menu, no sideways s
   await page.getByRole('button', { name: 'Готово' }).click();
   await expect(page.locator('#app')).not.toHaveClass(/big-text/);
 });
+
+test('Listik reads aloud: on for 2 class, button reads the quest, switch in Menu', async ({ page }) => {
+  // The test browser has no voices; record what would be spoken instead.
+  await page.addInitScript(() => {
+    const said: string[] = [];
+    (window as unknown as { __said: string[] }).__said = said;
+    class FakeUtterance {
+      lang = '';
+      rate = 1;
+      pitch = 1;
+      voice: unknown = null;
+      onend: (() => void) | null = null;
+      text: string;
+      constructor(text: string) {
+        this.text = text;
+      }
+    }
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: FakeUtterance, configurable: true });
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        speaking: false,
+        pending: false,
+        getVoices: () => [{ name: 'Milena', lang: 'ru-RU', localService: true, default: true }],
+        speak: (u: FakeUtterance) => said.push(u.text),
+        cancel: () => undefined,
+      },
+    });
+  });
+  await page.clock.install({ time: new Date('2026-11-01T10:00:00') });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  const speak = page.locator('#quest .speak');
+  await expect(speak).toBeVisible();
+  const box = (await speak.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  await speak.click();
+  const said = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
+  expect(said.at(-1)).toContain('Привет! Я Листик');
+  await expect(page.locator('#quest .goals')).toBeVisible(); // the tap did not fold the card
+  await shots(page, '23-voice');
+
+  // A question from Listik is read aloud as soon as it opens, with the answer options.
+  await page.evaluate(() => {
+    const app = window.__gardenApp as unknown as { state: { quiz: { pending: boolean } }; render: () => void };
+    app.state.quiz.pending = true;
+    app.render();
+  });
+  await page.locator('#listikBtn').click();
+  await expect(page.locator('#sheet h2 .speak')).toBeVisible();
+  const said2 = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
+  expect(said2.at(-1)).toContain('Варианты ответа');
+  await shots(page, '24-voice-quiz');
+  await page.locator('.sheet-close').click();
+
+  await page.getByRole('button', { name: 'Меню' }).click();
+  const toggle = page.getByLabel('Листик читает вслух');
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await page.locator('.sheet-close').click();
+  await expect(page.locator('#quest .speak')).toHaveCount(0);
+});

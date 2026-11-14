@@ -134,6 +134,8 @@ export interface GameState {
     tilt: boolean;
     /** Large text: null = by class (on for 2–3 class), or the player's own choice in the Menu. */
     bigText: boolean | null;
+    /** Listik reads aloud: null = by class (on for 2–3 class), or the player's own choice. */
+    voice: boolean | null;
   };
 }
 
@@ -165,7 +167,7 @@ export function newGame(now: number): GameState {
     fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 },
     rus: { learned: [], correct: 0, total: 0 },
     profile: { nick: '', grade: null },
-    settings: { sound: true, tilt: true, bigText: null },
+    settings: { sound: true, tilt: true, bigText: null, voice: null },
   };
 }
 
@@ -454,6 +456,9 @@ export const youngMode = (s: GameState): boolean => s.profile.grade !== null && 
 
 /** Large text is on by class unless the player switched it in the Menu. */
 export const bigTextOn = (s: GameState): boolean => s.settings.bigText ?? youngMode(s);
+
+/** Listik reads aloud by class unless the player switched it in the Menu. */
+export const voiceOn = (s: GameState): boolean => s.settings.voice ?? youngMode(s);
 
 export function setProfile(s: GameState, nick: string, grade: Grade, now: number) {
   s.profile = { nick: cleanNick(nick), grade };
