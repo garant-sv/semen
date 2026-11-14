@@ -54,8 +54,22 @@ const FRACTIONS: Record<number, [string, string]> = {
   5: ['пятая часть', 'пятую часть'],
 };
 
-/** Level 1..4 from the number of solved problems. */
-export const fairLevel = (solved: number) => Math.min(4, 1 + Math.floor(solved / 6));
+/** Level range by school class: the 2nd grade stays easy, the 5th starts with big numbers. */
+export const LEVELS_BY_GRADE: Record<number, [number, number]> = { 2: [1, 1], 3: [1, 2], 4: [1, 4], 5: [3, 4] };
+
+/** Level from the number of solved problems, kept within the class's range. */
+export const fairLevel = (solved: number, grade = 4) => {
+  const [lo, hi] = LEVELS_BY_GRADE[grade] ?? LEVELS_BY_GRADE[4];
+  return Math.min(hi, lo + Math.floor(solved / 6));
+};
+
+/** Problem kinds a class has already studied. */
+export const KINDS_BY_GRADE: Record<number, MathKind[]> = {
+  2: ['cost', 'change', 'perimeter', 'minutes'],
+  3: ['cost', 'change', 'canBuy', 'share', 'area', 'perimeter', 'minutes', 'fraction'],
+  4: ['cost', 'change', 'canBuy', 'share', 'area', 'perimeter', 'bushes', 'minutes', 'fraction', 'distance'],
+  5: ['cost', 'change', 'canBuy', 'share', 'area', 'perimeter', 'bushes', 'minutes', 'fraction', 'distance'],
+};
 
 export const KINDS_BY_LEVEL: Record<number, MathKind[]> = {
   1: ['cost', 'change', 'area', 'minutes', 'fraction', 'distance'],
@@ -74,10 +88,67 @@ const UNIT_FORMS: Record<string, [string, string, string]> = {
   цветов: ['цветок', 'цветка', 'цветов'],
 };
 
-export function makeProblem(level: number, rand: () => number, who: string, kind?: MathKind): MathProblem {
-  const p = buildProblem(level, rand, who, kind);
+export function makeProblem(level: number, rand: () => number, who: string, kind?: MathKind, grade = 4): MathProblem {
+  let k = kind;
+  if (!k) {
+    const allowed = KINDS_BY_LEVEL[Math.max(1, Math.min(4, level))].filter((x) => (KINDS_BY_GRADE[grade] ?? KINDS_BY_GRADE[4]).includes(x));
+    const list = allowed.length ? allowed : KINDS_BY_GRADE[grade] ?? KINDS_BY_LEVEL[1];
+    k = list[Math.min(list.length - 1, Math.floor(rand() * list.length))];
+  }
+  const p = grade === 2 ? buildEasy(rand, who, k) : buildProblem(level, rand, who, k);
   const forms = UNIT_FORMS[p.unit];
   return { ...p, answerText: `${p.answer} ${forms ? plural(p.answer, forms) : p.unit}` };
+}
+
+/** 2nd grade: adding and subtracting within 100, the first multiplication table, hours and minutes. */
+function buildEasy(rand: () => number, who: string, kind: MathKind): Omit<MathProblem, 'answerText'> {
+  const int = (a: number, b: number) => a + Math.floor(rand() * (b - a + 1));
+  const good = FAIR_GOODS[Math.min(FAIR_GOODS.length - 1, Math.floor(rand() * FAIR_GOODS.length))];
+  if (kind === 'change') {
+    const a = int(12, 45);
+    const paid = (Math.floor(a / 10) + int(1, 3)) * 10;
+    return {
+      kind,
+      text: `${who}: «Покупка стоит ${pet(a)}. Вот ${pet(paid)}. Сколько сдачи?»`,
+      answer: paid - a,
+      unit: 'лепестков',
+      hint: 'Из того, что дали, вычти стоимость покупки.',
+      solution: `${paid} − ${a} = ${paid - a}`,
+    };
+  }
+  if (kind === 'perimeter') {
+    const a = int(2, 9);
+    const b = int(2, 9);
+    return {
+      kind,
+      text: `${who}: «Грядка — прямоугольник: длина ${a} м, ширина ${b} м. Сколько метров заборчика нужно вокруг неё?»`,
+      answer: 2 * (a + b),
+      unit: 'м',
+      hint: 'Сложи длины всех четырёх сторон: две длины и две ширины.',
+      solution: `${a} + ${b} + ${a} + ${b} = ${2 * (a + b)} м`,
+    };
+  }
+  if (kind === 'minutes') {
+    const m = int(1, 8) * 5;
+    return {
+      kind,
+      text: `${who}: «Дорога до ярмарки заняла 1 ч ${m} мин. Сколько это всего минут?»`,
+      answer: 60 + m,
+      unit: 'мин',
+      hint: 'В 1 часе 60 минут.',
+      solution: `60 + ${m} = ${60 + m}`,
+    };
+  }
+  const n = int(2, 3);
+  const p = int(2, 5);
+  return {
+    kind: 'cost',
+    text: `${who}: «Мне, пожалуйста, ${n} ${plural(n, good.forms)} по ${perPet(p)}. Сколько с меня?»`,
+    answer: n * p,
+    unit: 'лепестков',
+    hint: 'Цена × количество. Можно и сложением: сложи цену столько раз, сколько покупок.',
+    solution: `${p} × ${n} = ${n * p}`,
+  };
 }
 
 function buildProblem(level: number, rand: () => number, who: string, kind?: MathKind): Omit<MathProblem, 'answerText'> {

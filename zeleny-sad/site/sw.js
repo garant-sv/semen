@@ -1,10 +1,10 @@
 /* Service worker for «Зелёный сад». Generated at build time from src/sw/sw-template.js. */
-const VERSION = 'd6c8a9194a84';
+const VERSION = 'a5272aff31a8';
 const CACHE = 'green-garden-' + VERSION;
 const PRECACHE = [
   "./",
-  "./assets/index-B3JDSRIj.css",
-  "./assets/index-se720OhI.js",
+  "./assets/index-BP3DVafE.css",
+  "./assets/index-zoJafrl7.js",
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -38,6 +38,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // The play journal goes straight to the network and is never cached.
+  if (url.pathname.startsWith('/api/')) return;
 
   if (req.mode === 'navigate') {
     // The app is a single page: always answer navigations from the precached shell.

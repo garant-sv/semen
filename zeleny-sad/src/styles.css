@@ -2053,3 +2053,722 @@ button.card:active {
 .sheet-close + .eyebrow {
   margin-right: 56px !important;
 }
+
+/* ------------------------------------------------------------ v0.7: profile (имя и класс) */
+
+/* Listik stands on a sunny hill. */
+.sheet-hero.meet {
+  position: relative;
+  height: 108px;
+  margin: -8px 0 6px;
+  place-items: end center;
+}
+
+.meet-scene {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 240px;
+  height: 104px;
+  margin-left: -120px;
+}
+
+.sheet-hero.meet .listik-svg {
+  position: relative;
+  margin-bottom: 26px;
+  filter: drop-shadow(0 4px 3px rgba(59, 46, 30, 0.16));
+}
+
+.meet-spark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: twinkle 3.2s ease-in-out infinite;
+}
+
+.meet-spark:nth-of-type(odd) {
+  animation-delay: -1.6s;
+}
+
+.meet-head {
+  text-align: center;
+}
+
+.sheet .meet-head h2 {
+  margin: 4px 0 2px;
+  font-size: 25px;
+  text-wrap: wrap;
+}
+
+.nb {
+  white-space: nowrap;
+}
+
+.profile-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.sheet .field-label {
+  margin: 2px 0 -4px;
+}
+
+.field .answer-input.name-input {
+  width: 100%;
+  height: 56px;
+  padding: 0 18px;
+  border-radius: 18px;
+  font-size: 20px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.name-input::placeholder {
+  color: #85745c;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.grade-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.grade-card {
+  --gc-bg: #f1f8e3;
+  --gc-on: #e0f1c5;
+  --gc-edge: #c2dea2;
+  --gc-deep: #4f9a3c;
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: end;
+  gap: 1px;
+  min-height: 112px;
+  padding: 8px 2px 10px;
+  border-radius: 20px;
+  border: 2px solid var(--gc-edge);
+  background: var(--gc-bg);
+  box-shadow: 0 3px 0 var(--gc-edge);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.grade-card[data-grade='3'] {
+  --gc-bg: #e7f4f7;
+  --gc-on: #cfecf3;
+  --gc-edge: #addbe6;
+  --gc-deep: #3688a3;
+}
+
+.grade-card[data-grade='4'] {
+  --gc-bg: #fff4d3;
+  --gc-on: #ffe9ad;
+  --gc-edge: #f0d283;
+  --gc-deep: #b97a16;
+}
+
+.grade-card[data-grade='5'] {
+  --gc-bg: #fdecef;
+  --gc-on: #fbd8de;
+  --gc-edge: #f1bac4;
+  --gc-deep: #bf5269;
+}
+
+.grade-icon {
+  display: block;
+  overflow: visible;
+}
+
+.grade-plant {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition: transform 0.25s ease;
+}
+
+.grade-card b {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.grade-card span {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.grade-card:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--gc-edge);
+}
+
+.grade-card.on {
+  background: var(--gc-on);
+  border-color: var(--gc-deep);
+  box-shadow: 0 4px 0 var(--gc-deep);
+  transform: translateY(-3px);
+  animation: gradePick 0.42s ease;
+}
+
+.grade-card.on .grade-plant {
+  transform: scale(1.14);
+  animation: growPop 0.5s ease;
+}
+
+.grade-card.on span {
+  color: var(--ink);
+}
+
+/* A small tick in the corner of the chosen class. */
+.grade-card.on::before,
+.grade-card.on::after {
+  content: '';
+  position: absolute;
+  animation: tickPop 0.35s ease 0.08s both;
+}
+
+.grade-card.on::before {
+  top: -9px;
+  right: -5px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--gc-deep);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(59, 46, 30, 0.2);
+}
+
+.grade-card.on::after {
+  top: -2px;
+  right: 4px;
+  width: 6px;
+  height: 11px;
+  border: solid #fff;
+  border-width: 0 3px 3px 0;
+  border-radius: 1px;
+  rotate: 45deg;
+}
+
+.sheet .profile-note {
+  margin: 2px 0 0;
+  font-size: 15px !important;
+  line-height: 1.35;
+}
+
+/* The main button stays in sight on short screens while the rest scrolls under it.
+   Sticky boxes stop at the sheet's content edge, so a cream strip covers the padding below. */
+.profile-cta {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: -6px -18px 0;
+  padding: 14px 18px 4px;
+  background: linear-gradient(rgba(255, 246, 227, 0), var(--cream) 14px);
+}
+
+.profile-cta::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: calc(var(--safe-bottom) + 16px);
+  background: var(--cream);
+}
+
+.btn.big {
+  min-height: 60px;
+  margin-top: 0;
+  border-radius: 20px;
+  font-size: 20px;
+}
+
+.sheet .pick-hint {
+  display: none;
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.btn[disabled] + .pick-hint {
+  display: block;
+}
+
+@keyframes gradePick {
+  0% { transform: translateY(0) scale(1); }
+  45% { transform: translateY(-6px) scale(1.06); }
+  75% { transform: translateY(-2px) scale(0.98); }
+  100% { transform: translateY(-3px) scale(1); }
+}
+
+@keyframes tickPop {
+  0% { scale: 0; }
+  70% { scale: 1.2; }
+  100% { scale: 1; }
+}
+
+/* iPhone SE and other short screens: the whole sheet fits without scrolling. */
+@media (max-height: 700px) {
+  .sheet-hero.meet {
+    height: 84px;
+    margin-top: -12px;
+  }
+  .meet-scene {
+    width: 194px;
+    height: 84px;
+    margin-left: -97px;
+  }
+  .sheet-hero.meet .listik-svg {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 21px;
+  }
+  .sheet .meet-head h2 {
+    font-size: 23px;
+  }
+  .profile-form {
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .field .answer-input.name-input {
+    height: 52px;
+  }
+  .grade-card {
+    min-height: 104px;
+    padding-top: 6px;
+  }
+  .grade-icon {
+    width: 29px;
+    height: 42px;
+  }
+  .btn.big {
+    min-height: 56px;
+  }
+}
+
+/* ------------------------------------------------------------ v0.8: visual polish (sheets, buttons, toasts) */
+
+:root {
+  --green-btn: #437f3c;
+  --green-btn-edge: #2f5f2b;
+  --eyebrow: #7a4c2e;
+  --shadow-soft: 0 4px 14px rgba(59, 46, 30, 0.12);
+  --focus: #2f6a2c;
+}
+
+/* Keyboard focus is always visible; taps do not leave a ring. */
+button:focus-visible,
+input:focus-visible,
+.sheet:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Buttons: one shape, a soft «pressable» edge, readable labels. */
+.btn {
+  border-radius: 18px;
+  line-height: 1.2;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.15s ease;
+}
+
+.btn.small {
+  font-size: 16px;
+}
+
+.btn.primary {
+  background: var(--green-btn);
+  border-color: var(--green-btn-edge);
+  box-shadow: 0 3px 0 var(--green-btn-edge), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.btn.primary:active {
+  box-shadow: 0 1px 0 var(--green-btn-edge);
+}
+
+.btn.ghost {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* A switched-off main button stays readable: it is «asleep», not broken. */
+.btn.primary:disabled {
+  opacity: 1;
+  background: #d5e0c6;
+  border-color: #bccaa9;
+  color: #4b5942;
+  box-shadow: 0 3px 0 #bccaa9;
+}
+
+/* Sheets. */
+.sheet-backdrop {
+  background: rgba(52, 45, 28, 0.42);
+}
+
+.sheet {
+  padding-top: 24px;
+  border-radius: 30px 30px 0 0;
+  background: linear-gradient(#fffaf0, var(--cream) 140px);
+  box-shadow: 0 -10px 34px rgba(59, 46, 30, 0.22), inset 0 2px 0 #fff;
+  animation: sheetIn 0.3s cubic-bezier(0.22, 0.9, 0.32, 1);
+}
+
+.sheet-close {
+  box-shadow: 0 2px 0 var(--cream-3);
+  color: var(--ink-soft);
+  transition: transform 0.08s ease;
+}
+
+.sheet-close:active {
+  transform: translateY(2px) scale(0.96);
+  box-shadow: none;
+}
+
+/* Eyebrow: a little leaf in front of the label. */
+.eyebrow {
+  color: var(--eyebrow);
+  line-height: 1.3;
+}
+
+.eyebrow::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 0 75% 0 75%;
+  background: var(--green-light);
+  box-shadow: inset 0 0 0 1.5px var(--green);
+}
+
+.small {
+  font-size: 15px !important;
+}
+
+.card {
+  border-radius: 20px;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+button.card:active {
+  box-shadow: 0 1px 0 var(--cream-3);
+}
+
+.card small,
+.badge-card small {
+  font-size: 15px;
+}
+
+.card.book p,
+.chip,
+.word-chip,
+.status {
+  font-size: 16px !important;
+}
+
+.toggle {
+  border-radius: 18px;
+}
+
+.menu-list {
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.menu-list .btn.wide {
+  margin-top: 0;
+}
+
+/* Toasts: a soft dark-green note; it moves to the top while a sheet is open so it never covers the answers. */
+.toast {
+  padding: 12px 18px;
+  border-radius: 18px;
+  background: #36552c;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  font-size: 17px;
+  box-shadow: 0 6px 18px rgba(40, 52, 30, 0.28);
+  animation: toastIn 0.3s cubic-bezier(0.22, 0.9, 0.32, 1.2);
+}
+
+.toast.warn {
+  background: #8a4520;
+}
+
+#app:has(.sheet-backdrop:not([hidden])) .toasts {
+  top: calc(var(--safe-top) + 10px);
+  bottom: auto;
+}
+
+/* Inputs. */
+.answer-input {
+  border-radius: 18px;
+  box-shadow: inset 0 2px 0 rgba(59, 46, 30, 0.05);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.answer-input::placeholder {
+  color: #85745c;
+  opacity: 1;
+}
+
+.answer-input:focus,
+.answer-input:focus-visible {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 4px rgba(94, 154, 75, 0.25);
+}
+
+/* Quiz answers and letters: the right one gets a tick and a small happy bounce. */
+.answers {
+  gap: 0;
+}
+
+.answer {
+  position: relative;
+  min-height: 56px;
+  padding-left: 18px;
+  padding-right: 18px;
+  font-size: 18px;
+}
+
+.answer.right,
+.answer.wrong,
+.btn.letter.right,
+.btn.letter.wrong {
+  opacity: 1;
+  color: var(--ink);
+}
+
+.answer.right,
+.btn.letter.right {
+  position: relative;
+  background: #dff1c8;
+  border-color: #5e9a4b;
+  box-shadow: 0 3px 0 #5e9a4b;
+  animation: rightPop 0.45s ease;
+}
+
+.answer.right {
+  padding-right: 54px;
+}
+
+.answer.wrong,
+.btn.letter.wrong {
+  background: #fdeae4;
+  border-color: #e3a092;
+  box-shadow: 0 3px 0 #e3a092;
+}
+
+.answer.right::before,
+.answer.right::after,
+.btn.letter.right::before,
+.btn.letter.right::after {
+  content: '';
+  position: absolute;
+  animation: tickPop 0.35s ease 0.12s both;
+}
+
+.answer.right::before,
+.btn.letter.right::before {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--green-btn);
+  border: 2px solid #fff;
+}
+
+.answer.right::after,
+.btn.letter.right::after {
+  width: 6px;
+  height: 12px;
+  border: solid #fff;
+  border-width: 0 3px 3px 0;
+  border-radius: 1px;
+  rotate: 45deg;
+}
+
+.answer.right::before {
+  top: 50%;
+  right: 12px;
+  margin-top: -14px;
+}
+
+.answer.right::after {
+  top: 50%;
+  right: 23px;
+  margin-top: -8px;
+}
+
+.btn.letter.right::before {
+  top: -10px;
+  right: -8px;
+}
+
+.btn.letter.right::after {
+  top: -3px;
+  right: 3px;
+}
+
+.btn.letter {
+  border-radius: 20px;
+}
+
+.explain {
+  border: 2px solid transparent;
+  border-radius: 20px;
+}
+
+.explain.ok {
+  background: #eef8e3;
+  border-color: #cfe6b5;
+  animation: cheer 0.4s cubic-bezier(0.22, 0.9, 0.32, 1.25);
+}
+
+.explain.try {
+  background: #fff3dc;
+  border-color: #f3deb0;
+}
+
+.explain b {
+  display: block;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.explain.ok b {
+  color: #2f6a2c;
+}
+
+.explain.try b {
+  color: #7a4310;
+}
+
+.explain p {
+  margin-bottom: 4px;
+}
+
+.hint-box {
+  border: 2px solid #f3deb0;
+  border-radius: 18px;
+}
+
+.word-sign {
+  border-radius: 18px;
+}
+
+.word-sign.ok {
+  animation: rightPop 0.45s ease;
+}
+
+.word-sign .gap-fill,
+.word-sign .gap-none {
+  color: #2f7a2c;
+}
+
+.word-sign.fix .gap-fill,
+.word-sign.fix .gap-none {
+  color: #a8432f;
+}
+
+/* Fair: the customer gets a round «portrait», the speech bubble a soft shadow. */
+.fair-head .icon-svg {
+  flex: none;
+  padding: 6px;
+  border-radius: 50%;
+  background: linear-gradient(#fffdf5 79%, #cfe6a8 79%);
+  border: 2px solid var(--cream-3);
+  box-shadow: var(--shadow-soft);
+}
+
+.bubble {
+  border-radius: 22px;
+  box-shadow: var(--shadow-soft);
+}
+
+.fair-buttons .btn {
+  min-height: 56px;
+}
+
+.zone-card,
+.map-wrap,
+.order-items li,
+.badge-card {
+  border-radius: 20px;
+}
+
+@keyframes sheetIn {
+  0% { transform: translateY(56px); opacity: 0; }
+  55% { opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+
+@keyframes toastIn {
+  from { transform: translateY(14px) scale(0.96); opacity: 0; }
+}
+
+@keyframes rightPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.045); }
+  70% { transform: scale(0.985); }
+  100% { transform: scale(1); }
+}
+
+@keyframes cheer {
+  from { transform: translateY(16px) scale(0.97); opacity: 0; }
+}
+
+/* Calm mode: no movement at all for the new effects (the global rule above already shortens the rest). */
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .toast,
+  .explain,
+  .explain.ok,
+  .hint-box,
+  .grade-card.on,
+  .grade-card.on .grade-plant,
+  .grade-card.on::before,
+  .grade-card.on::after,
+  .answer.right,
+  .btn.letter.right,
+  .answer.right::before,
+  .answer.right::after,
+  .btn.letter.right::before,
+  .btn.letter.right::after,
+  .word-sign.ok,
+  .meet-spark,
+  .hero-hop .listik-svg {
+    animation: none !important;
+  }
+  .grade-card,
+  .grade-plant,
+  .btn,
+  .card,
+  .sheet-close,
+  .answer-input {
+    transition: none !important;
+  }
+}

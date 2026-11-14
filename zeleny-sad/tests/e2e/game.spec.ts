@@ -18,9 +18,19 @@ async function noGuests(page: Page) {
   });
 }
 
+/** First run asks for a name and class; pick grade 4 (the old default). */
+async function onboard(page: Page, nick = '') {
+  await expect(page.getByRole('heading', { name: /Листик|Имя и класс/ })).toBeVisible();
+  if (nick) await page.getByPlaceholder('Например, Сёма').fill(nick);
+  await page.getByRole('button', { name: /^4\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+}
+
 async function start(page: Page) {
   await page.clock.install({ time: new Date('2026-11-01T10:00:00') });
   await page.goto('/');
+  await onboard(page);
   await expect(page.locator('.quest-title')).toContainText('Задание 1 из 18');
   await noGuests(page);
 }
@@ -159,6 +169,7 @@ test('mobile layout: no horizontal scroll, large touch targets', async ({ page }
 test('works offline after the first load', async ({ page, context, browserName }) => {
   test.skip(browserName !== 'chromium', 'Playwright WebKit does not run service workers reliably; checked in Chromium.');
   await page.goto('/');
+  await onboard(page);
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller) {
@@ -204,6 +215,7 @@ test('restored garden renders bridge, pond and decorations', async ({ page }) =>
     localStorage.setItem('green-garden/save', s);
   }, JSON.stringify(save));
   await page.goto('/');
+  await onboard(page);
   await noGuests(page);
   await expect(page.locator('[data-landmark="pond"]')).not.toHaveClass(/broken/);
   await expect(page.locator('[data-landmark="bridge"]')).not.toHaveClass(/broken/);
@@ -235,6 +247,7 @@ test('guests can be met; requests on the board can be fulfilled', async ({ page 
     localStorage.setItem('green-garden/save', s);
   }, JSON.stringify(save));
   await page.goto('/');
+  await onboard(page);
   await noGuests(page);
 
   // A guest appears; tapping it opens the discovery card and adds petals.
@@ -288,6 +301,7 @@ test('vegetable patch, Listik question, night and garden photo', async ({ page }
     localStorage.setItem('green-garden/save', s);
   }, JSON.stringify(save));
   await page.goto('/');
+  await onboard(page);
   await noGuests(page);
   // Night: the sky is dark and the lantern glows.
   await expect(page.locator('#l-sky rect').first()).toBeAttached();
@@ -358,6 +372,7 @@ test('map of natural zones: expedition to the tundra, zone plants and animals', 
     localStorage.setItem('green-garden/save', s);
   }, JSON.stringify(save));
   await page.goto('/');
+  await onboard(page);
   await noGuests(page);
   await expect(page.locator('.quest-title')).toContainText('Задание 16 из 18');
   await page.getByRole('button', { name: 'Карта' }).click();
@@ -404,6 +419,7 @@ test('harvest fair: a customer asks a math problem; hint after a mistake, petals
     localStorage.setItem('green-garden/save', s);
   }, JSON.stringify(save));
   await page.goto('/');
+  await onboard(page);
   await noGuests(page);
   await expect(page.locator('[data-fair]')).toHaveClass(/busy/);
   await page.locator('[data-fair]').click({ force: true }); // the badge bobs
@@ -453,6 +469,7 @@ test('signs at the beds: fill in the missing letter, the word goes to the word l
     localStorage.setItem('green-garden/save', s);
   }, JSON.stringify(save));
   await page.goto('/');
+  await onboard(page);
   await noGuests(page);
   await expect(page.locator('[data-sign="0"]')).toHaveClass(/todo/);
   await page.locator('[data-sign="0"]').click({ force: true }); // the sign wiggles
@@ -474,4 +491,28 @@ test('signs at the beds: fill in the missing letter, the word goes to the word l
   await page.locator('[data-tab="words"]').click();
   await expect(page.locator('.word-chip')).toHaveText(['морковь']);
   await shots(page, '18-words');
+});
+
+test('profile: name and class are asked once and can be changed in the Menu', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-01T10:00:00') });
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Начать играть!' })).toBeDisabled();
+  await shots(page, '20-profile');
+  await page.getByPlaceholder('Например, Сёма').fill('Сёма<b>');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await expect(page.locator('.toast').first()).toContainText('Рад знакомству, Сёмаb!');
+  await page.reload();
+  await expect(page.locator('.quest-title')).toContainText('Задание 1 из 18');
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: /2 класс — изменить/ }).click();
+  await page.getByRole('button', { name: /^5\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Готово' }).click();
+  const grade = await page.evaluate(() => JSON.parse(localStorage.getItem('green-garden/save')!).profile.grade);
+  expect(grade).toBe(5);
+  // The anonymous journal keeps events locally (sent only on the https site) and never the name.
+  const journal = await page.evaluate(() => localStorage.getItem('green-garden/events') ?? '');
+  expect(journal).toContain('"e":"profile"');
+  expect(journal).not.toContain('Сёма');
 });

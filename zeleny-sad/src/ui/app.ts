@@ -54,6 +54,8 @@ import {
   decorAvailable,
   formatDuration,
   freeDecorations,
+  gradeOf,
+  setProfile,
   gardenProgress,
   goalDone,
   harvest,
@@ -69,6 +71,7 @@ import {
   type GameState,
   type GrowthChange,
 } from '../game/state';
+import { setTelemetryEnabled, setTelemetryGrade, telemetryEnabled, track } from '../telemetry';
 import {
   exportSave,
   importSave,
@@ -82,7 +85,7 @@ import { BADGES, earned, newBadges } from '../game/badges';
 import type { Question } from '../game/quiz';
 import { fairLevel, makeProblem, type MathProblem } from '../game/math';
 import { NO_LETTER, RULES, WORDS, viewWord, type RuleId } from '../game/russian';
-import { ICONS, SHARED_DEFS, decoIcon, guestArt, guestIcon, listik, medalIcon, petalIcon, plantIcon, starIcon } from './art';
+import { ICONS, SHARED_DEFS, decoIcon, gradeIcon, guestArt, guestIcon, listik, medalIcon, meetScene, petalIcon, plantIcon, starIcon } from './art';
 import {
   BOARD,
   PLOTS,
@@ -168,6 +171,7 @@ const ZONE_SPOTS: [number, number][] = [
 const AREA_NAME: Record<AreaId, string> = { garden: 'Сад', veg: 'Огород', tundra: 'Тундра', taiga: 'Тайга', steppe: 'Степь' };
 
 const escapeWord = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const esc = (t: string) => escapeWord(t).replace(/"/g, '&quot;').replace(/>/g, '&gt;');
 
 /** The masked word with the gap filled in and the inserted letter highlighted. */
 function highlightWord(masked: string, answer: string): string {
@@ -346,6 +350,16 @@ export class App {
 
   private afterLoad(loaded: LoadResult) {
     setSoundEnabled(this.state.settings.sound);
+    setTelemetryGrade(this.state.profile.grade);
+    track('start', {
+      st: loaded.status,
+      mig: loaded.status === 'ok' ? loaded.migratedFrom : null,
+      q: this.state.questIndex,
+      pwa: matchMedia('(display-mode: standalone)').matches,
+      w: window.innerWidth,
+      ua: /iPhone|iPad/.test(navigator.userAgent) ? 'ios' : /Android/.test(navigator.userAgent) ? 'android' : 'other',
+      ya: /YaBrowser/.test(navigator.userAgent),
+    });
     const now = this.now();
     const changes = advance(this.state, now);
     const done = checkQuests(this.state, now);
@@ -362,7 +376,9 @@ export class App {
       this.welcomeBack(changes);
     }
     if (loaded.status !== 'corrupt') this.persist();
-    if (done.length) this.showQuestDone(done);
+    const quests = done.length ? () => this.showQuestDone(done) : undefined;
+    if (loaded.status !== 'corrupt' && !this.state.profile.grade) this.showProfile(true, quests);
+    else quests?.();
     this.tickTimer = window.setInterval(() => this.refresh(false), 1000);
   }
 
@@ -425,6 +441,7 @@ export class App {
   }
 
   private setSaveError(err: StorageError | null) {
+    if (err) track('save_error', { kind: err.kind, msg: err.message });
     this.saveError = err;
     const b = $(this.root, '#banner');
     if (!err) {
@@ -1048,12 +1065,13 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const options = [...q.options].sort(() => Math.random() - 0.5);
     const sheet = this.openSheet(`<div class="sheet-hero hero-hop">${listik(64, 'wow')}</div><p class="eyebrow">Вопрос Листика · ${q.topic}</p><h2>${q.text}</h2>
 <div class="answers">${options.map((o, i) => `<button type="button" class="btn wide answer" data-answer="${i}">${o}</button>`).join('')}</div>
-<p class="muted small center">Это из «Окружающего мира» за 4 класс. Ошибиться не страшно — Листик подскажет.</p>`);
+<p class="muted small center">Это из «Окружающего мира» за ${gradeOf(this.state)} класс. Ошибиться не страшно — Листик подскажет.</p>`);
     sheet.querySelectorAll<HTMLButtonElement>('[data-answer]').forEach((b) =>
       b.addEventListener('click', () => {
         const chosen = options[Number(b.dataset.answer)];
         const r = answerQuiz(this.state, q.id, chosen, this.now());
         if (!r.ok) return;
+        track('quiz', { id: q.id, ok: r.correct, pick: r.correct ? null : chosen });
         this.question = null;
         sheet.querySelectorAll<HTMLButtonElement>('[data-answer]').forEach((x) => {
           x.disabled = true;
@@ -1097,6 +1115,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
         const choice = options[Number(b.dataset.opt)];
         const r = answerSign(this.state, i, choice, this.now());
         if (!r.ok) return;
+        track('sign', { id: w.id, ok: r.correct, pick: r.correct ? null : choice });
         sheet.querySelectorAll<HTMLButtonElement>('[data-opt]').forEach((x) => {
           x.disabled = true;
           const opt = options[Number(x.dataset.opt)];
@@ -1125,7 +1144,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const now = this.now();
     advanceFair(s, now);
     play('tap');
-    const level = fairLevel(s.fair.solved);
+    const level = fairLevel(s.fair.solved, gradeOf(s));
     if (s.fair.queue <= 0) {
       this.openSheet(`<div class="sheet-hero">${listik(64)}</div><p class="eyebrow">Ярмарка урожая · уровень ${level}</p><h2>Покупателей пока нет</h2><p>Следующий придёт примерно через ${nextCustomerIn(s, now)} мин. А пока можно поливать и собирать урожай!</p><p class="muted">Решено задач: ${s.fair.solved}, с первой попытки: ${s.fair.firstTry}.</p>`);
       return;
@@ -1133,7 +1152,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     if (!this.fairTask) {
       const pool = GUEST_IDS.filter((id) => GUESTS[id].area === 'garden' || s.guests[id]);
       const guest = pool[Math.floor(Math.random() * pool.length)];
-      this.fairTask = { guest, problem: makeProblem(level, Math.random, GUESTS[guest].name) };
+      this.fairTask = { guest, problem: makeProblem(level, Math.random, GUESTS[guest].name, undefined, gradeOf(s)) };
     }
     const { problem: p, guest } = this.fairTask;
     let tries = 0;
@@ -1153,6 +1172,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       done = true;
       const served = serveCustomer(this.state, r, this.now());
       this.fairTask = null;
+      track('fair', { k: p.kind, lvl: level, r, hint: hinted });
       if (!served.ok) return;
       input.disabled = true;
       sheet.querySelectorAll<HTMLButtonElement>('.fair-buttons .btn').forEach((b) => (b.disabled = true));
@@ -1184,6 +1204,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       if (done) return;
       const raw = input.value.replace(/\s/g, '');
       if (!/^\d+$/.test(raw)) {
+        if (raw) track('fair_bad', { k: p.kind, len: raw.length, sep: /[.,]/.test(raw) });
         input.classList.remove('shake');
         void input.offsetWidth;
         input.classList.add('shake');
@@ -1191,6 +1212,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
         return;
       }
       if (Number(raw) === p.answer) return finish(tries === 0 && !hinted ? 'first' : 'second');
+      track('fair_try', { k: p.kind, lvl: level, ans: Number(raw), want: p.answer });
       tries += 1;
       if (tries >= 2) return finish('failed');
       play('error');
@@ -1398,6 +1420,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
   }
 
   private showQuestDone(quests: Quest[]) {
+    if (quests[0]) track('quest', { id: quests[0].id, n: this.state.questIndex });
     const back = $(this.root, '#sheetBackdrop');
     if (!back.hidden) {
       // Wait until the current sheet is closed.
@@ -1438,7 +1461,9 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const sheet = this.openSheet(`<h2>Меню</h2>${status}
 <div class="menu-list">
   <label class="toggle"><input type="checkbox" data-act="sound" ${s.settings.sound ? 'checked' : ''}><span>Звук</span></label>
+  <label class="toggle"><input type="checkbox" data-act="journal" ${telemetryEnabled() ? 'checked' : ''}><span>Помогать улучшать игру</span></label>
   <button type="button" class="btn wide primary" data-act="photo">Сфотографировать сад</button>
+  <button type="button" class="btn wide" data-act="profile">${s.profile.nick ? `${esc(s.profile.nick)} · ` : ''}${gradeOf(s)} класс — изменить</button>
   <button type="button" class="btn wide" data-act="export">Сохранить резервную копию</button>
   <button type="button" class="btn wide" data-act="import">Загрузить из копии</button>
   <button type="button" class="btn wide ghost" data-act="about">Об игре</button>
@@ -1451,6 +1476,10 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       play('tap');
       this.persist();
     });
+    $<HTMLInputElement>(sheet, '[data-act="journal"]').addEventListener('change', (e) => {
+      setTelemetryEnabled((e.target as HTMLInputElement).checked);
+      play('tap');
+    });
     $(sheet, '[data-act="export"]').addEventListener('click', () => this.doExport());
     $(sheet, '[data-act="import"]').addEventListener('click', () => {
       const input = $<HTMLInputElement>(this.root, '#importFile');
@@ -1458,6 +1487,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       input.click();
     });
     $(sheet, '[data-act="about"]').addEventListener('click', () => this.showAbout());
+    $(sheet, '[data-act="profile"]').addEventListener('click', () => this.showProfile(false));
     $(sheet, '[data-act="photo"]').addEventListener('click', () => {
       this.closeSheet();
       void this.takePhoto();
@@ -1465,9 +1495,53 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     $(sheet, '[data-act="reset"]').addEventListener('click', () => this.confirmReset());
   }
 
+  /** «Кто играет?» — nickname and class. Shown once at the start, then from the Menu. */
+  private showProfile(first: boolean, then?: () => void) {
+    const s = this.state;
+    let grade = s.profile.grade;
+    const cards = ([2, 3, 4, 5] as const)
+      .map((g) => `<button type="button" class="grade-card${grade === g ? ' on' : ''}" data-grade="${g}" aria-label="${g} класс" aria-pressed="${grade === g}">${gradeIcon(g, 48)}<b>${g}</b><span>класс</span></button>`)
+      .join('');
+    const sheet = this.openSheet(`<div class="sheet-hero hero-hop meet">${meetScene()}${listik(76)}</div>
+<div class="meet-head"><p class="eyebrow">${first ? 'Знакомство' : 'Кто играет'}</p><h2>${first ? 'Привет! Я Листик. <span class="nb">А ты кто?</span>' : 'Имя и класс'}</h2></div>
+<form data-form class="profile-form">
+  <label class="field"><span class="field-title">Как тебя называть?</span><input class="answer-input name-input" type="text" maxlength="16" autocomplete="off" autocapitalize="words" enterkeyhint="done" placeholder="Например, Сёма" value="${esc(s.profile.nick)}" data-nick></label>
+  <p class="field-label field-title">В каком ты классе?</p>
+  <div class="grade-row" role="group" aria-label="Класс">${cards}</div>
+  <p class="muted small profile-note">По классу Листик подбирает вопросы, задачи на ярмарке и слова на табличках. Имя хранится только на этом устройстве.</p>
+  <div class="profile-cta"><button type="submit" class="btn primary wide big" data-act="save" ${grade ? '' : 'disabled'}>${first ? 'Начать играть!' : 'Готово'}</button>
+  <p class="pick-hint">Выбери свой класс — и в путь!</p></div>
+</form>`, then ? () => window.setTimeout(then, 200) : undefined);
+    const save = $<HTMLButtonElement>(sheet, '[data-act="save"]');
+    sheet.querySelectorAll<HTMLButtonElement>('[data-grade]').forEach((b) =>
+      b.addEventListener('click', () => {
+        grade = Number(b.dataset.grade) as 2 | 3 | 4 | 5;
+        play('tap');
+        sheet.querySelectorAll<HTMLButtonElement>('[data-grade]').forEach((o) => {
+          const on = o === b;
+          o.classList.toggle('on', on);
+          o.setAttribute('aria-pressed', String(on));
+        });
+        save.disabled = false;
+      }),
+    );
+    $(sheet, '[data-form]').addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!grade) return;
+      const nick = $<HTMLInputElement>(sheet, '[data-nick]').value;
+      setProfile(this.state, nick, grade, this.now());
+      setTelemetryGrade(grade);
+      track('profile', { first, named: Boolean(this.state.profile.nick) });
+      this.persist();
+      this.closeSheet();
+      play('quest');
+      this.toast(this.state.profile.nick ? `Рад знакомству, ${this.state.profile.nick}!` : 'Отлично, начинаем!');
+    });
+  }
+
   private showAbout() {
     this.openSheet(`<h2>Об игре</h2><p>«Зелёный сад» — уютная игра о том, как разбудить заброшенный волшебный сад. Сделана с любовью для юных садоводов.</p>
-<ul class="plain"><li>Без рекламы, покупок, регистрации, чатов и слежки.</li><li>Растения не погибают, если долго не заходить.</li><li>Работает без интернета после первой загрузки.</li></ul>
+<ul class="plain"><li>Без рекламы, покупок, регистрации и чатов.</li><li>Пока игра в тестировании, она отправляет обезличенный журнал: какой вопрос или задача попались, верно ли ответ, и ошибки программы. Имя и сад не отправляются. Выключить можно в Меню: «Помогать улучшать игру».</li><li>Растения не погибают, если долго не заходить.</li><li>Работает без интернета после первой загрузки.</li></ul>
 <p class="muted small">Вся графика нарисована кодом специально для этой игры, звуки синтезируются в браузере. Сторонних картинок, шрифтов и звуков нет.</p>`);
   }
 
@@ -1477,7 +1551,9 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
 <button type="button" class="btn wide danger" data-act="yes">Да, начать заново</button>`);
     $(sheet, '[data-act="export"]').addEventListener('click', () => this.doExport());
     $(sheet, '[data-act="yes"]').addEventListener('click', () => {
+      const profile = this.state.profile;
       this.state = newGame(this.now());
+      this.state.profile = profile;
       this.mode = 'garden';
       this.selectedDeco = null;
       this.closeSheet();

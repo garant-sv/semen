@@ -75,6 +75,19 @@ npm run check        # типы + юнит + сборка + e2e
 
 E2E запускаются в трёх профилях: **эмуляция** iPhone 13 и iPhone SE (движок WebKit) и Pixel 7 (Chromium). **На реальном iPhone игра не проверялась.** Обновления 14.11.2026 (0.2 и 0.3) проверены в Chrome с размерами экранов iPhone 13, iPhone SE и Pixel 7 (36 сквозных тестов); WebKit в той среде установить не удалось. Офлайн-тест в WebKit пропускается, потому что Playwright WebKit ненадёжно работает с service worker.
 
+## Сервер, журнал и безопасность (v0.7)
+
+Установка и обновление на сервере (под root):
+
+    curl -fsSL https://raw.githubusercontent.com/garant-sv/semen/main/deploy/zeleny-sad-install.sh | bash
+
+Первый раз с журналом в GitHub: `... | LOGS_REPO=garant-sv/zeleny-sad-logs bash` — скрипт покажет ключ для Deploy keys (с правом записи).
+
+- **Профиль:** имя (только на устройстве) и класс 2–5; класс выбирает вопросы, слова и задачи (`gradeOf`, `questionGrades`, `wordsForGrade`, `fairLevel(solved, grade)`).
+- **Журнал** (`src/telemetry.ts`): случайный номер устройства, класс, версия и события `start, profile, quiz, sign, fair, fair_try, fair_bad, quest, error, save_error`. Без имени, сада и IP. GET `/api/e` → nginx пишет в `/var/log/zeleny-sad/events.log`, в 00:05 — `days/ГГГГ-ММ-ДД.jsonl` (60 дней) и push в закрытый репозиторий. Выключатель — Меню → «Помогать улучшать игру». Отправка только с https-сайта.
+- **Разбор:** задача Claude по расписанию каждый день в 10:37 МСК читает журнал за вчера и открывает PR с исправлениями (слияние — только владелец).
+- **Безопасность:** CSP `default-src 'self'`, `frame-ancestors 'none'`, `form-action 'none'`, `X-Frame-Options DENY`, `Permissions-Policy`, `Referrer-Policy no-referrer`; обычный access_log выключен; скрытые файлы и прочие `/api/*` → 404. Внешних ссылок в игре нет, service worker отвечает игрой на любой адрес внутри `sad.kvestapp.ru`.
+
 ## Технологии и почему так
 
 **TypeScript + Vite, без игрового движка. Сцена — SVG, интерфейс — обычный DOM.**

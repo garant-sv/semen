@@ -614,6 +614,41 @@ export function listik(size = 56, mood: 'happy' | 'wow' = 'happy'): string {
   return `<svg class="listik-svg" viewBox="-28 -34 56 68" width="${size}" height="${size}" aria-hidden="true"><path d="M0 24 Q3 30 -2 33" stroke="#3F7A3A" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M0 -31 C19 -19 24 5 0 25 C-24 5 -19 -19 0 -31Z" fill="url(#gListik)" stroke="#3F7A3A" stroke-width="2"/><path d="M0 -25 L0 19 M0 -8 L-9 -15 M0 -8 L9 -15 M0 8 L-11 1 M0 8 L11 1" stroke="#B7DE96" stroke-width="1.3" fill="none" opacity=".8"/><g class="eyes"><ellipse cx="-7" cy="-5" rx="4.4" ry="5.2" fill="#fff" stroke="#2E3A24" stroke-width=".8"/><ellipse cx="7" cy="-5" rx="4.4" ry="5.2" fill="#fff" stroke="#2E3A24" stroke-width=".8"/><circle cx="-6.2" cy="-4" r="2.4" fill="#2E3A24"/><circle cx="7.8" cy="-4" r="2.4" fill="#2E3A24"/><circle cx="-5.4" cy="-5" r=".9" fill="#fff"/><circle cx="8.6" cy="-5" r=".9" fill="#fff"/></g><circle cx="-12" cy="4" r="3" fill="#F59AAA" opacity=".55"/><circle cx="12" cy="4" r="3" fill="#F59AAA" opacity=".55"/>${mouth}</svg>`;
 }
 
+// ---------------------------------------------------------------- profile sheet art
+
+/** One plant for each school class: the higher the class, the more it has grown. */
+export function gradeIcon(grade: 2 | 3 | 4 | 5, size = 44): string {
+  const mound = `<ellipse cx="0" cy="1.5" rx="13" ry="4.6" fill="${C.soilDeep}"/><ellipse cx="0" cy="0" rx="11.5" ry="3.6" fill="${C.soil}"/><ellipse cx="-4" cy="-.8" rx="3.4" ry="1" fill="#A9734D" opacity=".7"/>`;
+  let plant: string;
+  if (grade === 2) {
+    // A seedling: two seed leaves just out of the soil.
+    plant = stem(11, 0, 2.8) + leaf(0, -10.5, 11.5, -150, C.leafLight) + leaf(0, -10.5, 11.5, -30, C.leaf);
+  } else if (grade === 3) {
+    // A sprout: taller, with a new pair of leaves on top.
+    plant = stem(20, 1.5, 2.8) + leaf(0, -8, 12.5, -160, C.leaf) + leaf(0, -10.5, 12.5, -22, C.leaf) + leaf(0, -19.5, 9.5, -136, C.leafLight) + leaf(0, -19.5, 9.5, -46, C.leafLight);
+  } else if (grade === 4) {
+    // A young plant with a bud that is about to open.
+    plant =
+      stem(27, -1.5, 3) + leaf(0, -7, 13, -162, C.leaf) + leaf(0, -10, 13, -20, C.leaf) + leaf(0, -17, 10.5, -150, C.leafLight) + leaf(0, -19.5, 10.5, -32, C.leafLight) +
+      `<path d="M0 -24 C-6 -27.5 -5 -35.5 0 -39 C5 -35.5 6 -27.5 0 -24Z" fill="#F59AAA" stroke="#C25A6E" stroke-width=".9"/><path d="M0 -37 Q-1.2 -31 0 -26" stroke="#FFD3DB" stroke-width="1" fill="none" stroke-linecap="round"/><path d="M-4.2 -26.5 Q0 -22.5 4.2 -26.5 Q2.2 -30 0 -29.4 Q-2.2 -30 -4.2 -26.5Z" fill="${C.leaf}" stroke="${C.stemDark}" stroke-width=".7"/>`;
+  } else {
+    // In full bloom.
+    plant =
+      stem(28, 1.5, 3) + leaf(0, -6.5, 13, -164, C.leaf) + leaf(0, -9.5, 13, -18, C.leaf) + leaf(0, -16.5, 10.5, -150, C.leafLight) + leaf(0, -18.5, 10.5, -30, C.leafLight) +
+      `<g transform="translate(0 -31)">${petalRing(9, 6.8, 3.1, 4.9, '#FFFDF5', '#D9C9A4')}<circle r="4.6" fill="#F6BE3B" stroke="#C98A22" stroke-width=".9"/><circle cx="-1.3" cy="-1.3" r="1.4" fill="#FFE39A"/></g>`;
+  }
+  return `<svg class="grade-icon" viewBox="-17 -44 34 50" width="${f(size * 0.68)}" height="${size}" aria-hidden="true">${mound}<g class="grade-plant">${plant}</g></svg>`;
+}
+
+/** A sunny hill for Listik to stand on in the «Привет!» sheet. */
+export function meetScene(): string {
+  const daisy = (x: number, y: number, s: number, fill: string) =>
+    `<g transform="translate(${x} ${y}) scale(${s})"><path d="M0 0 Q1.5 6 0 12" stroke="${C.stem}" stroke-width="1.8" fill="none" stroke-linecap="round"/>${petalRing(7, 3.6, 1.9, 2.8, fill, 'none')}<circle r="2.3" fill="#F6BE3B"/></g>`;
+  const spark = (x: number, y: number, r: number) =>
+    `<path class="meet-spark" d="M${x} ${y - r} Q${x} ${y} ${x + r} ${y} Q${x} ${y} ${x} ${y + r} Q${x} ${y} ${x - r} ${y} Q${x} ${y} ${x} ${y - r}Z" fill="#F6BE3B"/>`;
+  return `<svg class="meet-scene" viewBox="0 0 240 104" width="240" height="104" aria-hidden="true"><circle cx="120" cy="56" r="46" fill="#FFE9A6" opacity=".75"/><circle cx="120" cy="56" r="35" fill="#FFF3CB"/><path d="M0 104 C40 76 84 70 120 70 C156 70 200 76 240 104Z" fill="#CFE6A8"/><path d="M26 104 C60 84 92 79 120 79 C148 79 180 84 214 104Z" fill="#B9DC98"/>${daisy(48, 80, 1, '#FFFDF5')}${daisy(66, 86, 0.75, '#F59AAA')}${daisy(190, 79, 1, '#FFFDF5')}${daisy(173, 86, 0.75, '#B9B4F0')}${leaf(204, 92, 9, -120, C.leafLight, false)}${leaf(34, 92, 9, -60, C.leafLight, false)}${spark(62, 34, 5)}${spark(182, 28, 6)}${spark(200, 52, 3.5)}${spark(40, 56, 3.5)}</svg>`;
+}
+
 // ---------------------------------------------------------------- small UI icons
 
 export function petalIcon(size = 22): string {

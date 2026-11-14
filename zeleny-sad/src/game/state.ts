@@ -32,10 +32,10 @@ import {
   type Stage,
 } from './data';
 import { FAIR_EVERY_MIN, FAIR_FROM_QUEST, FAIR_QUEUE, fairLevel } from './math';
-import { RUS_FROM_QUEST, RUS_REWARD, RUS_TRY_REWARD, WORDS, viewWord } from './russian';
-import { QUESTIONS, QUIZ_EVERY, QUIZ_FROM_QUEST, QUIZ_REWARD, QUIZ_TRY_REWARD, type Question } from './quiz';
+import { RUS_FROM_QUEST, RUS_REWARD, RUS_TRY_REWARD, WORDS, viewWord, wordsForGrade } from './russian';
+import { QUESTIONS, QUIZ_EVERY, QUIZ_FROM_QUEST, QUIZ_REWARD, QUIZ_TRY_REWARD, questionGrades, type Grade, type Question } from './quiz';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 export interface Plot {
   plant: PlantId | null;
@@ -108,6 +108,8 @@ export interface GameState {
     correct: number;
     asked: number;
   };
+  /** Who is playing: a nickname (stays on the device) and the school class that sets the tasks. */
+  profile: { nick: string; grade: Grade | null };
   /** «Таблички у грядок»: Russian spelling. */
   rus: {
     /** Words filled in correctly (shown in the word list; asked less often). */
@@ -158,6 +160,7 @@ export function newGame(now: number): GameState {
     quiz: { pending: false, solved: [], correct: 0, asked: 0 },
     fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 },
     rus: { learned: [], correct: 0, total: 0 },
+    profile: { nick: '', grade: null },
     settings: { sound: true },
   };
 }
@@ -439,10 +442,26 @@ export function checkQuiz(s: GameState): boolean {
   return true;
 }
 
-/** Pick the next question: unsolved ones first. */
+/** The class that sets the difficulty (4 until the player chooses). */
+export const gradeOf = (s: GameState): Grade => s.profile.grade ?? 4;
+
+export function setProfile(s: GameState, nick: string, grade: Grade, now: number) {
+  s.profile = { nick: cleanNick(nick), grade };
+  s.updatedAt = now;
+}
+
+/** A nickname: up to 16 letters, digits, spaces and hyphens. */
+export function cleanNick(nick: string): string {
+  return nick.replace(/[^\p{L}\p{N} -]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 16);
+}
+
+/** Pick the next question for the player's class: unsolved ones first. */
 export function pickQuestion(s: GameState, rand: () => number): Question {
-  const open = QUESTIONS.filter((q) => !s.quiz.solved.includes(q.id));
-  const pool = open.length ? open : QUESTIONS;
+  const g = gradeOf(s);
+  const forGrade = QUESTIONS.filter((q) => questionGrades(q).includes(g));
+  const all = forGrade.length ? forGrade : QUESTIONS;
+  const open = all.filter((q) => !s.quiz.solved.includes(q.id));
+  const pool = open.length ? open : all;
   return pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))];
 }
 
@@ -467,9 +486,10 @@ export function answerQuiz(s: GameState, id: string, answer: string, now: number
 /** A word for a new sign: not yet learned and not on another sign, if possible. */
 export function pickWord(s: GameState, rand: () => number): string {
   const busy = new Set(s.plots.map((p) => p.sign?.id).filter(Boolean));
-  const fresh = WORDS.filter((w) => !s.rus.learned.includes(w.id) && !busy.has(w.id));
-  const pool = fresh.length ? fresh : WORDS.filter((w) => !busy.has(w.id));
-  const list = pool.length ? pool : WORDS;
+  const words = wordsForGrade(gradeOf(s));
+  const fresh = words.filter((w) => !s.rus.learned.includes(w.id) && !busy.has(w.id));
+  const pool = fresh.length ? fresh : words.filter((w) => !busy.has(w.id));
+  const list = pool.length ? pool : words;
   return list[Math.min(list.length - 1, Math.floor(rand() * list.length))].id;
 }
 
@@ -543,7 +563,7 @@ export function fairReward(level: number, result: FairResult): number {
 export function serveCustomer(s: GameState, result: FairResult, now: number): Ok<{ petals: number; level: number }> | Fail {
   advanceFair(s, now);
   if (s.fair.queue <= 0) return fail('Покупателей пока нет.');
-  const level = fairLevel(s.fair.solved);
+  const level = fairLevel(s.fair.solved, gradeOf(s));
   const petals = fairReward(level, result);
   if (s.fair.queue >= FAIR_QUEUE) s.fair.lastAt = now; // the timer restarts when a place frees up
   s.fair.queue -= 1;

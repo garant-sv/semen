@@ -1,7 +1,9 @@
 import './styles.css';
 import { getStorage } from './game/save';
 import { App } from './ui/app';
+import { installTelemetry } from './telemetry';
 
+installTelemetry();
 const root = document.getElementById('app')!;
 const st = getStorage();
 const app = new App(root, 'storage' in st ? { storage: st.storage } : { storage: null, storageError: st.error });

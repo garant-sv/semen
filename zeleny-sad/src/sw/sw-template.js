@@ -28,6 +28,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // The play journal goes straight to the network and is never cached.
+  if (url.pathname.startsWith('/api/')) return;
 
   if (req.mode === 'navigate') {
     // The app is a single page: always answer navigations from the precached shell.

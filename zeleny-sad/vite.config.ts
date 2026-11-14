@@ -42,8 +42,11 @@ function serviceWorker(): Plugin {
   };
 }
 
+const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as { version: string };
+
 export default defineConfig({
   base: './',
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   plugins: [serviceWorker()],
   build: { target: 'safari15', assetsInlineLimit: 0 },
   server: { host: true },

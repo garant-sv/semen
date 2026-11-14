@@ -179,3 +179,17 @@ export function viewWord(w: WordTask): WordView {
 export const RUS_FROM_QUEST = 4;
 export const RUS_REWARD = 3;
 export const RUS_TRY_REWARD = 1;
+
+/** Spelling rules a class has already studied. */
+export const RULES_BY_GRADE: Record<number, RuleId[]> = {
+  2: ['dict', 'vowel', 'paired', 'sep'],
+  3: ['dict', 'vowel', 'paired', 'silent', 'hush', 'sep'],
+  4: ['dict', 'vowel', 'paired', 'silent', 'hush', 'sep', 'noun', 'verb'],
+  5: ['dict', 'vowel', 'paired', 'silent', 'hush', 'sep', 'noun', 'verb'],
+};
+
+/** Words that suit the class (the 2nd grade has not met Ъ yet). */
+export function wordsForGrade(grade = 4): WordTask[] {
+  const rules = RULES_BY_GRADE[grade] ?? RULES_BY_GRADE[4];
+  return WORDS.filter((w) => rules.includes(w.rule) && !(grade <= 2 && w.rule === 'sep' && viewWord(w).answer === 'ъ'));
+}

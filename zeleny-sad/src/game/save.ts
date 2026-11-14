@@ -3,11 +3,11 @@
 
 import { DECO_IDS, GUEST_IDS, LANDMARK_IDS, PLANT_IDS, PLOT_COUNT, QUESTS, SLOT_COUNT, TOTAL_PLOTS, type DecoId, type GuestId, type PlantId, type Stage } from './data';
 import { BADGE_IDS } from './badges';
-import { QUESTIONS } from './quiz';
+import { QUESTIONS, type Grade } from './quiz';
 import { WORDS } from './russian';
 
 const WORD_IDS = WORDS.map((w) => w.id);
-import { SAVE_VERSION, emptyPlot, newGame, type GameState, type Order, type Plot } from './state';
+import { SAVE_VERSION, cleanNick, emptyPlot, newGame, type GameState, type Order, type Plot } from './state';
 
 export const SAVE_KEY = 'green-garden/save';
 export const PREV_KEY = 'green-garden/save-prev';
@@ -66,7 +66,8 @@ type Raw = Record<string, unknown>;
  * v4 — vegetable patch (4 more plots, restored.veg), badges, Listik's questions (quiz, stats.sinceQuiz).
  * v5 — natural zones (tundra, taiga, steppe): 9 more plots, restored.<zone>.
  * v6 — «Ярмарка урожая» (fair: queue, lastAt, solved, firstTry).
- * v7 — current: «Таблички у грядок» (plot.sign, rus).
+ * v7 — «Таблички у грядок» (plot.sign, rus).
+ * v8 — current: player profile (nickname and school class).
  */
 export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
   1: (raw) => {
@@ -121,6 +122,7 @@ export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
   },
   5: (raw) => ({ ...raw, version: 6, fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 } }),
   6: (raw) => ({ ...raw, version: 7, rus: { learned: [], correct: 0, total: 0 } }),
+  7: (raw) => ({ ...raw, version: 8, profile: { nick: '', grade: null } }),
 };
 
 export function migrate(raw: Raw): { data: Raw; from: number } {
@@ -235,6 +237,11 @@ export function sanitize(raw: Raw, now: number): GameState {
   s.stats.sinceQuiz = Math.floor(num(stats.sinceQuiz, 0, 0, 1000));
 
   s.badges = Array.isArray(raw.badges) ? [...new Set(raw.badges.filter((b): b is string => BADGE_IDS.includes(b as string)))] : [];
+  const profile = isObj(raw.profile) ? raw.profile : {};
+  s.profile = {
+    nick: typeof profile.nick === 'string' ? cleanNick(profile.nick) : '',
+    grade: [2, 3, 4, 5].includes(profile.grade as number) ? (profile.grade as Grade) : null,
+  };
   const rus = isObj(raw.rus) ? raw.rus : {};
   s.rus = {
     learned: Array.isArray(rus.learned) ? [...new Set(rus.learned.filter((w): w is string => WORD_IDS.includes(w as string)))] : [],
