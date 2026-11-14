@@ -532,10 +532,158 @@ test('«живое 2,5D»: far layers shift under the finger, beds stay put, til
   await shots(page, '20-depth');
 
   await page.locator('[data-nav="menu"]').click();
-  const tilt = page.getByLabel('Сад двигается, когда наклоняешь телефон');
+  const tilt = page.getByLabel('Наклон телефона двигает сад');
   await expect(tilt).toBeChecked();
   await tilt.uncheck();
   await page.reload();
   await page.locator('[data-nav="menu"]').click();
-  await expect(page.getByLabel('Сад двигается, когда наклоняешь телефон')).not.toBeChecked();
+  await expect(page.getByLabel('Наклон телефона двигает сад')).not.toBeChecked();
+});
+
+test('large text: on for 2 class, off for 4 class, switch in Menu, no sideways scroll', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-01T10:00:00') });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await expect(page.locator('#app')).toHaveClass(/big-text/);
+  const size = await page.locator('.quest-body p').first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(size).toBeGreaterThanOrEqual(17); // 19px, or 17px on short phones (normal text is 15px)
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  await shots(page, '21-big-text');
+
+  await page.getByRole('button', { name: 'Меню' }).click();
+  const box = page.getByLabel('Крупный текст');
+  await expect(box).toBeChecked();
+  await page.waitForTimeout(600);
+  await shots(page, '22-big-text-menu');
+  await box.uncheck();
+  await expect(page.locator('#app')).not.toHaveClass(/big-text/);
+  await page.getByRole('button', { name: /2 класс — изменить/ }).click();
+  await page.getByRole('button', { name: /^4\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Готово' }).click();
+  await expect(page.locator('#app')).not.toHaveClass(/big-text/);
+});
+
+test('Listik reads aloud: on for 2 class, button reads the quest, switch in Menu', async ({ page }) => {
+  // The test browser has no voices; record what would be spoken instead.
+  await page.addInitScript(() => {
+    const said: string[] = [];
+    (window as unknown as { __said: string[] }).__said = said;
+    class FakeUtterance {
+      lang = '';
+      rate = 1;
+      pitch = 1;
+      voice: unknown = null;
+      onend: (() => void) | null = null;
+      text: string;
+      constructor(text: string) {
+        this.text = text;
+      }
+    }
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: FakeUtterance, configurable: true });
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        speaking: false,
+        pending: false,
+        getVoices: () => [{ name: 'Milena', lang: 'ru-RU', localService: true, default: true }],
+        speak: (u: FakeUtterance) => said.push(u.text),
+        cancel: () => undefined,
+      },
+    });
+  });
+  await page.clock.install({ time: new Date('2026-11-01T10:00:00') });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  const speak = page.locator('#quest .speak');
+  await expect(speak).toBeVisible();
+  const box = (await speak.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  await speak.click();
+  const said = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
+  expect(said.at(-1)).toContain('Привет! Я Листик');
+  await expect(page.locator('#quest .goals')).toBeVisible(); // the tap did not fold the card
+  await shots(page, '23-voice');
+
+  // A question from Listik is read aloud as soon as it opens, with the answer options.
+  await page.evaluate(() => {
+    const app = window.__gardenApp as unknown as { state: { quiz: { pending: boolean } }; render: () => void };
+    app.state.quiz.pending = true;
+    app.render();
+  });
+  await page.locator('#listikBtn').click();
+  await expect(page.locator('#sheet h2 .speak')).toBeVisible();
+  const said2 = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
+  expect(said2.at(-1)).toContain('Варианты ответа');
+  await shots(page, '24-voice-quiz');
+  await page.locator('.sheet-close').click();
+
+  await page.getByRole('button', { name: 'Меню' }).click();
+  const toggle = page.getByLabel('Листик читает вслух');
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await page.locator('.sheet-close').click();
+  await expect(page.locator('#quest .speak')).toHaveCount(0);
+});
+
+test('2–3 class: hint finger after a quiet moment, fair problem with a picture, quiz with pictures', async ({ page }) => {
+  const now = new Date('2026-11-01T12:00:00').getTime();
+  await page.clock.install({ time: now });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await noGuests(page);
+  const finger = page.locator('#l-hint .finger');
+  await expect(finger).toHaveCount(0);
+  await page.clock.runFor(10_000);
+  await expect(finger).toHaveCount(1);
+  // It points at the first empty bed (task 1: plant a daisy).
+  const f = (await finger.boundingBox())!;
+  const bed = (await page.locator('[data-plot="0"]').boundingBox())!;
+  expect(f.x + f.width / 2).toBeGreaterThan(bed.x);
+  expect(f.x).toBeLessThan(bed.x + bed.width);
+  await shots(page, '25-finger');
+  await page.locator('#stage').dispatchEvent('pointerdown');
+  await expect(finger).toHaveCount(0);
+
+  // Fair: a 2nd-grade problem about buying shows the goods with price tags.
+  await page.evaluate(() => {
+    const app = window.__gardenApp as unknown as {
+      state: { questIndex: number; fair: { queue: number } };
+      fairTask: unknown;
+      showFair: () => void;
+    };
+    app.state.questIndex = 3;
+    app.state.fair.queue = 1;
+    app.fairTask = {
+      guest: 'hedgehog',
+      problem: {
+        kind: 'cost', text: 'Ёжик: «Мне, пожалуйста, 3 морковки по 4 лепестка. Сколько с меня?»', answer: 12, unit: 'лепестков',
+        answerText: '12 лепестков', hint: 'Цена × количество.', solution: '4 × 3 = 12',
+        pic: { kind: 'goods', art: 'carrot', count: 3, price: 4 },
+      },
+    };
+    app.showFair();
+  });
+  await expect(page.locator('.fair-pic .good')).toHaveCount(3);
+  await page.waitForTimeout(400);
+  await shots(page, '26-fair-pic');
+  await page.locator('.sheet-close').click();
+
+  // Quiz: options with pictures.
+  await page.evaluate(() => {
+    const app = window.__gardenApp as unknown as { state: { quiz: { pending: boolean } }; question: unknown; render: () => void };
+    app.state.quiz.pending = true;
+    app.question = {
+      id: 'g2-pets', topic: 'Животные', grades: [2, 3], text: 'Какое животное — домашнее?',
+      options: ['Корова', 'Лиса', 'Ёж'], pics: ['🐄', '🦊', '🦔'], explain: 'Корову держит человек.',
+    };
+    app.render();
+  });
+  await page.locator('#listikBtn').click();
+  await expect(page.locator('.answers.with-pics .answer .pic')).toHaveCount(3);
+  await page.waitForTimeout(400);
+  await shots(page, '27-quiz-pics');
 });

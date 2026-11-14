@@ -14,6 +14,11 @@ export interface Question {
   text: string;
   /** The first option is the correct one; the UI shuffles them. */
   options: [string, string, string];
+  /**
+   * 0.8: pictures for the options (same order), shown to 2–3 class. Emoji, so they are
+   * drawn by the phone itself and need nothing from the internet.
+   */
+  pics?: [string, string, string];
   explain: string;
 }
 
@@ -240,6 +245,7 @@ export const QUESTIONS: Question[] = [
     grades: [2, 3],
     text: 'Что относится к неживой природе?',
     options: ['Камень', 'Берёза', 'Воробей'],
+    pics: ['🪨', '🌳', '🐦'],
     explain: 'Камень не растёт, не дышит и не питается — это неживая природа. Берёза и воробей — живые.',
   },
   {
@@ -256,6 +262,7 @@ export const QUESTIONS: Question[] = [
     grades: [2, 3],
     text: 'Какое животное — домашнее?',
     options: ['Корова', 'Лиса', 'Ёж'],
+    pics: ['🐄', '🦊', '🦔'],
     explain: 'Домашние животные живут рядом с человеком, и он о них заботится. Лиса и ёж — дикие.',
   },
   {
@@ -280,6 +287,7 @@ export const QUESTIONS: Question[] = [
     grades: [2, 3],
     text: 'Кто из них насекомое?',
     options: ['Муравей', 'Паук', 'Дождевой червь'],
+    pics: ['🐜', '🕷️', '🪱'],
     explain: 'У насекомых шесть ног. У паука восемь ног, а у червя ног нет совсем.',
   },
   {
@@ -296,6 +304,7 @@ export const QUESTIONS: Question[] = [
     grades: [2, 3],
     text: 'Что ёжик делает зимой?',
     options: ['Спит в гнезде из листьев', 'Собирает грибы', 'Меняет шубку на белую'],
+    pics: ['🍂', '🍄', '❄️'],
     explain: 'Зимой ёжик впадает в спячку и спит до весны в гнезде из листьев и травы.',
   },
   // 3 класс
@@ -329,6 +338,7 @@ export const QUESTIONS: Question[] = [
     grades: [3, 4],
     text: 'Кто из этих животных — земноводное?',
     options: ['Лягушка', 'Ящерица', 'Карась'],
+    pics: ['🐸', '🦎', '🐟'],
     explain: 'Земноводные живут и в воде, и на суше. Ящерица — пресмыкающееся, карась — рыба.',
   },
   {
@@ -345,6 +355,7 @@ export const QUESTIONS: Question[] = [
     grades: [3, 4],
     text: 'Как называется вода в газообразном состоянии?',
     options: ['Водяной пар', 'Лёд', 'Снег'],
+    pics: ['♨️', '🧊', '❄️'],
     explain: 'Вода бывает жидкой, твёрдой (лёд, снег) и газообразной — это водяной пар.',
   },
   // 5 класс: биология и география

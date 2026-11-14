@@ -19,6 +19,7 @@ import {
   ZONE_IDS,
   plantArea,
   plotArea,
+  areaPlots,
   QUESTS,
   SLOT_COUNT,
   type DecoId,
@@ -132,6 +133,10 @@ export interface GameState {
     sound: boolean;
     /** «Живое 2,5D»: the garden moves a little when the phone is tilted. */
     tilt: boolean;
+    /** Large text: null = by class (on for 2–3 class), or the player's own choice in the Menu. */
+    bigText: boolean | null;
+    /** Listik reads aloud: null = by class (on for 2–3 class), or the player's own choice. */
+    voice: boolean | null;
   };
 }
 
@@ -163,7 +168,7 @@ export function newGame(now: number): GameState {
     fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 },
     rus: { learned: [], correct: 0, total: 0 },
     profile: { nick: '', grade: null },
-    settings: { sound: true, tilt: true },
+    settings: { sound: true, tilt: true, bigText: null, voice: null },
   };
 }
 
@@ -446,6 +451,25 @@ export function checkQuiz(s: GameState): boolean {
 
 /** The class that sets the difficulty (4 until the player chooses). */
 export const gradeOf = (s: GameState): Grade => s.profile.grade ?? 4;
+
+/** 2–3 class: the gentler mode (large text, Listik reads aloud, tasks with pictures). */
+export const youngMode = (s: GameState): boolean => s.profile.grade !== null && s.profile.grade <= 3;
+
+/** Large text is on by class unless the player switched it in the Menu. */
+export const bigTextOn = (s: GameState): boolean => s.settings.bigText ?? youngMode(s);
+
+/**
+ * «Подсказывающий пальчик»: the bed in this area the child would most likely tap next —
+ * a ripe plant first, then one waiting for water, then an empty bed when nothing is growing.
+ */
+export function nextTap(s: GameState, now: number, area: AreaId): number | null {
+  const beds = areaPlots(area).filter((i) => plotStatus(s, i, now) !== 'locked');
+  const first = (st: PlotStatus) => beds.find((i) => plotStatus(s, i, now) === st) ?? null;
+  return first('ready') ?? first('thirsty') ?? (beds.some((i) => plotStatus(s, i, now) === 'growing') ? null : first('empty'));
+}
+
+/** Listik reads aloud by class unless the player switched it in the Menu. */
+export const voiceOn = (s: GameState): boolean => s.settings.voice ?? youngMode(s);
 
 export function setProfile(s: GameState, nick: string, grade: Grade, now: number) {
   s.profile = { nick: cleanNick(nick), grade };

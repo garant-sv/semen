@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { QUESTIONS, questionGrades } from '../../src/game/quiz';
 import { WORDS, wordsForGrade } from '../../src/game/russian';
 import { fairLevel, makeProblem } from '../../src/game/math';
-import { cleanNick, gradeOf, newGame, pickQuestion, pickWord, setProfile } from '../../src/game/state';
+import { bigTextOn, cleanNick, gradeOf, newGame, pickQuestion, pickWord, setProfile, youngMode } from '../../src/game/state';
 import { parseSave } from '../../src/game/save';
 
 const seq = (_n: number) => {
@@ -61,5 +61,22 @@ describe('profile and grades', () => {
     expect(parseSave(JSON.stringify(v7), 1).state.profile).toEqual({ nick: '', grade: null });
     const bad = { ...newGame(0), profile: { nick: '<img>Петя', grade: 9 } };
     expect(parseSave(JSON.stringify(bad), 1).state.profile).toEqual({ nick: 'imgПетя', grade: null });
+  });
+});
+
+describe('0.8: large text for 2–3 class', () => {
+  it('is on by class and can be switched by the player', () => {
+    const s = newGame(0);
+    expect(bigTextOn(s)).toBe(false); // class not chosen yet
+    s.profile.grade = 2;
+    expect(youngMode(s)).toBe(true);
+    expect(bigTextOn(s)).toBe(true);
+    s.profile.grade = 4;
+    expect(bigTextOn(s)).toBe(false);
+    s.settings.bigText = true;
+    expect(bigTextOn(s)).toBe(true);
+    s.profile.grade = 3;
+    s.settings.bigText = false;
+    expect(bigTextOn(s)).toBe(false);
   });
 });

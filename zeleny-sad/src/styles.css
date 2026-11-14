@@ -596,6 +596,8 @@ button.card:active {
 .toggle input {
   width: 28px;
   height: 28px;
+  flex-shrink: 0;
+  margin-left: 12px;
   accent-color: var(--green);
   order: 2;
 }
@@ -2817,5 +2819,216 @@ button.card:active {
   .sheet-close,
   .answer-input {
     transition: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------ 0.8: large text
+   On for 2–3 class (or from the Menu). Only reading text grows; the layout stays the same. */
+.big-text .quest-title {
+  font-size: 15px;
+}
+
+.big-text .quest-body p,
+.big-text .goals li {
+  font-size: 19px;
+  line-height: 1.4;
+}
+
+.big-text .collapsed .goals li {
+  font-size: 17px;
+}
+
+.big-text .sheet p,
+.big-text .plain,
+.big-text .order-items li,
+.big-text .toggle {
+  font-size: 20px;
+  line-height: 1.45;
+}
+
+.big-text .sheet h2 {
+  font-size: 27px;
+}
+
+.big-text .bubble {
+  font-size: 21px;
+  line-height: 1.4;
+}
+
+.big-text .answer {
+  font-size: 21px;
+  min-height: 62px;
+}
+
+.big-text .btn {
+  font-size: 19px;
+}
+
+.big-text .explain,
+.big-text .explain b {
+  font-size: 20px;
+}
+
+.big-text .hint-box,
+.big-text .zone-card p {
+  font-size: 19px !important;
+}
+
+.big-text .small,
+.big-text .status {
+  font-size: 17px !important;
+}
+
+.big-text .card b {
+  font-size: 19px;
+}
+
+.big-text .card small,
+.big-text .card.book p,
+.big-text .badge-card small {
+  font-size: 16px;
+}
+
+.big-text .word-chip {
+  font-size: 17px;
+}
+
+.big-text .toast {
+  font-size: 19px;
+}
+
+/* Short phones: the quest card must not push the garden off the screen. */
+@media (max-height: 700px) {
+  .big-text .quest-body p,
+  .big-text .goals li {
+    font-size: 17px;
+    line-height: 1.35;
+  }
+  .big-text .toggle {
+    font-size: 18px;
+  }
+}
+
+/* ------------------------------------------------------------------ 0.8: Listik reads aloud */
+.speak {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px 0 -8px 8px;
+  padding: 0;
+  vertical-align: middle;
+  border-radius: 50%;
+  border: 2px solid var(--cream-3);
+  background: #fff;
+  color: var(--green);
+  cursor: pointer;
+  box-shadow: 0 2px 0 var(--cream-3);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.speak svg {
+  width: 22px;
+  height: 22px;
+}
+
+.speak:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+.quest-avatar .speak {
+  display: grid;
+  margin: 6px 0 0 -1px;
+}
+
+.quest-card.collapsed .quest-avatar .speak {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ 0.8: pictures and the hint finger */
+.answers.with-pics .answer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+}
+
+.answer .pic {
+  flex: none;
+  font-size: 34px;
+  line-height: 1;
+  width: 42px;
+  text-align: center;
+}
+
+.fair-pic {
+  margin: 4px 0 12px;
+}
+
+.fair-pic.goods {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.fair-pic .good {
+  display: grid;
+  justify-items: center;
+  padding: 6px 6px 4px;
+  border-radius: 16px;
+  background: #fff;
+  border: 2px solid var(--cream-3);
+}
+
+.fair-pic .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.fair-pic.bed svg {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.finger-hand {
+  animation: fingerTap 1.1s ease-in-out infinite;
+}
+
+.finger-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fingerRing 1.1s ease-out infinite;
+}
+
+@keyframes fingerTap {
+  0%,
+  100% {
+    transform: translate(6px, -12px);
+  }
+  45%,
+  60% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes fingerRing {
+  0%,
+  45% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
   }
 }
