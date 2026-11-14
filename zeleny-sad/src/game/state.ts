@@ -31,9 +31,10 @@ import {
   type Quest,
   type Stage,
 } from './data';
+import { FAIR_EVERY_MIN, FAIR_FROM_QUEST, FAIR_QUEUE, fairLevel } from './math';
 import { QUESTIONS, QUIZ_EVERY, QUIZ_FROM_QUEST, QUIZ_REWARD, QUIZ_TRY_REWARD, type Question } from './quiz';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export interface Plot {
   plant: PlantId | null;
@@ -104,6 +105,17 @@ export interface GameState {
     correct: number;
     asked: number;
   };
+  /** «Ярмарка урожая»: customers with math problems. */
+  fair: {
+    /** Customers waiting at the stall. */
+    queue: number;
+    /** When the customer timer last ticked (0 — the fair has not opened yet). */
+    lastAt: number;
+    /** Problems solved (first or second try). */
+    solved: number;
+    /** Solved on the first try. */
+    firstTry: number;
+  };
   settings: {
     sound: boolean;
   };
@@ -134,6 +146,7 @@ export function newGame(now: number): GameState {
     stats: { planted: {}, watered: 0, harvested: 0, sinceGolden: 0, sinceQuiz: 0 },
     badges: [],
     quiz: { pending: false, solved: [], correct: 0, asked: 0 },
+    fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 },
     settings: { sound: true },
   };
 }
@@ -435,6 +448,63 @@ export function answerQuiz(s: GameState, id: string, answer: string, now: number
   s.petals += petals;
   s.updatedAt = now;
   return { ok: true, correct, petals };
+}
+
+// ---------------------------------------------------------------- fair
+
+export function fairAvailable(s: GameState): boolean {
+  return s.questIndex >= FAIR_FROM_QUEST;
+}
+
+/**
+ * Bring the customer queue up to date: a new customer every few minutes, at most a few waiting.
+ * Returns true when the fair has just opened.
+ */
+export function advanceFair(s: GameState, now: number): boolean {
+  const f = s.fair;
+  if (!fairAvailable(s)) return false;
+  if (f.lastAt === 0) {
+    f.lastAt = now;
+    f.queue = Math.max(f.queue, 1);
+    return true;
+  }
+  if (now < f.lastAt) f.lastAt = now; // the device clock went back
+  const step = FAIR_EVERY_MIN * 60_000;
+  const added = Math.floor((now - f.lastAt) / step);
+  if (f.queue >= FAIR_QUEUE) {
+    f.lastAt = now;
+  } else if (added > 0) {
+    f.queue = Math.min(FAIR_QUEUE, f.queue + added);
+    f.lastAt = f.queue >= FAIR_QUEUE ? now : f.lastAt + added * step;
+  }
+  return false;
+}
+
+/** Minutes until the next customer comes (0 if the stall is full). */
+export function nextCustomerIn(s: GameState, now: number): number {
+  if (s.fair.queue >= FAIR_QUEUE || !s.fair.lastAt) return 0;
+  return Math.max(1, Math.ceil((s.fair.lastAt + FAIR_EVERY_MIN * 60_000 - now) / 60_000));
+}
+
+export type FairResult = 'first' | 'second' | 'failed';
+
+export function fairReward(level: number, result: FairResult): number {
+  return result === 'first' ? 3 + level : result === 'second' ? 2 : 1;
+}
+
+/** A customer has been served; returns the petals earned. */
+export function serveCustomer(s: GameState, result: FairResult, now: number): Ok<{ petals: number; level: number }> | Fail {
+  advanceFair(s, now);
+  if (s.fair.queue <= 0) return fail('Покупателей пока нет.');
+  const level = fairLevel(s.fair.solved);
+  const petals = fairReward(level, result);
+  if (s.fair.queue >= FAIR_QUEUE) s.fair.lastAt = now; // the timer restarts when a place frees up
+  s.fair.queue -= 1;
+  if (result !== 'failed') s.fair.solved += 1;
+  if (result === 'first') s.fair.firstTry += 1;
+  s.petals += petals;
+  s.updatedAt = now;
+  return { ok: true, petals, level };
 }
 
 // ---------------------------------------------------------------- quests

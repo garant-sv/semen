@@ -3,6 +3,7 @@
 
 import { AREA_PLOTS, PLOT_COUNT, SLOT_COUNT, VEG_PLOT_COUNT, plotArea, type DecoId, type PlantId, type ZoneId } from '../game/data';
 import {
+  fairAvailable,
   gardenProgress,
   orderComplete,
   ordersAvailable,
@@ -244,7 +245,7 @@ export function wildSVG(progress: number): string {
   const spots = [
     [30, 236], [158, 214], [376, 260], [372, 376], [20, 396], [384, 500], [12, 612], [380, 616],
   ];
-  return `<g opacity="${(1 - progress).toFixed(2)}">${spots
+  return `<g opacity="${(1 - progress).toFixed(2)}" pointer-events="none">${spots
     .map(
       ([x, y]) =>
         `<path d="M${x - 9} ${y} q2 -14 -3 -22 M${x} ${y} q-1 -16 4 -24 M${x + 8} ${y} q3 -10 8 -14" stroke="#A4875A" stroke-width="2" fill="none" stroke-linecap="round"/>`,
@@ -460,6 +461,36 @@ export function lightsSVG(spots: { x: number; y: number; r: number; color?: stri
   return spots
     .map((p) => `<circle class="night-glow" cx="${p.x}" cy="${p.y}" r="${p.r}" fill="url(#${p.color ?? 'gLampGlow'})" pointer-events="none"/>`)
     .join('');
+}
+
+// ---------------------------------------------------------------- fair stall
+
+export const STALL = { x: 150, y: 242 };
+
+/** «Ярмарка урожая» stall with a badge counting waiting customers. */
+export function stallSVG(s: GameState): string {
+  if (!fairAvailable(s)) return '';
+  const q = s.fair.queue;
+  let stripes = '';
+  for (let i = 0; i < 6; i++) stripes += `<rect x="${(-34 + i * 11.34).toFixed(1)}" y="-64" width="11.4" height="14" fill="${i % 2 ? '#FFF6E3' : '#E5546B'}"/>`;
+  let scallops = '';
+  for (let i = 0; i < 6; i++) scallops += `<circle cx="${(-28.3 + i * 11.34).toFixed(1)}" cy="-50" r="5.7" fill="${i % 2 ? '#FFF6E3' : '#E5546B'}"/>`;
+  const badge = q
+    ? `<g class="bob" transform="translate(32 -74)"><circle r="11" fill="#F6BE3B" stroke="#fff" stroke-width="2.4"/><text y="4.6" font-size="13" font-weight="900" text-anchor="middle" fill="#5A3A0A">${q}</text></g>`
+    : '';
+  return `<g class="stall${q ? ' busy' : ''}" data-fair="1" transform="translate(${STALL.x} ${STALL.y})" role="button" aria-label="Ярмарка урожая: ${q ? `покупателей ждёт ${q}` : 'покупателей пока нет'}">
+<rect x="-40" y="-90" width="80" height="98" fill="transparent"/>
+${shadow(34, 7, 1)}
+<rect x="-28" y="-50" width="3.6" height="50" fill="${C.woodDark}"/><rect x="24.4" y="-50" width="3.6" height="50" fill="${C.woodDark}"/>
+<rect x="-32" y="-22" width="64" height="22" rx="2" fill="#C99A6B" stroke="${C.woodDark}" stroke-width="1.4"/>
+<path d="M-32 -15 H32" stroke="${C.woodDark}" stroke-width="1" opacity=".5"/>
+<g transform="translate(-18 -24)"><path d="M-4 0 L4 0 L0 12Z" fill="#F28C28" stroke="#B85E14" stroke-width=".8" transform="rotate(180 0 6) translate(0 -12)"/><path d="M-3 -12 l-2 -5 M0 -12 v-6 M3 -12 l2 -5" stroke="${C.stem}" stroke-width="1.4"/></g>
+<g transform="translate(0 -28)"><ellipse cx="0" cy="0" rx="8" ry="6.4" fill="#F29A2E" stroke="#A85A16" stroke-width=".9"/><path d="M-3 -6 Q-4 0 -3 6 M3 -6 Q4 0 3 6" stroke="#C9701E" stroke-width=".8" fill="none"/><path d="M0 -6 q1 -3 3 -4" stroke="#6B5A2E" stroke-width="1.6" fill="none"/></g>
+<g transform="translate(17 -26)"><circle cx="-3" cy="0" r="3" fill="#FFFDF5" stroke="#D9CDB0" stroke-width=".6"/><circle cx="3" cy="-2" r="3" fill="#F59AAA" stroke="#C25A6E" stroke-width=".6"/><circle cx="0" cy="-5" r="3" fill="#F6BE3B" stroke="#C98A22" stroke-width=".6"/></g>
+${stripes}${scallops}
+<rect x="-20" y="-80" width="40" height="13" rx="2" fill="${C.cream}" stroke="${C.woodDark}" stroke-width="1"/>
+<text x="0" y="-70.3" font-size="8" font-weight="800" text-anchor="middle" fill="${C.ink}">Ярмарка</text>
+${badge}</g>`;
 }
 
 // ---------------------------------------------------------------- order board

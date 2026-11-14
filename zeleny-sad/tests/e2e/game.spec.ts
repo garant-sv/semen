@@ -382,3 +382,50 @@ test('map of natural zones: expedition to the tundra, zone plants and animals', 
   await page.locator('#view-tundra [data-go="garden"]').click();
   await expect(page.locator('#view-garden')).toBeVisible();
 });
+
+test('harvest fair: a customer asks a math problem; hint after a mistake, petals for the answer', async ({ page }) => {
+  const now = new Date('2026-11-01T12:00:00').getTime();
+  await page.clock.install({ time: now });
+  const empty = { plant: null, stage: 0, wateredAt: null, plantedAt: null, golden: false };
+  const save = {
+    version: 6, createdAt: now, updatedAt: now, petals: 10,
+    unlockedPlants: ['daisy', 'sunflower'], openPlots: 4,
+    plots: Array.from({ length: 19 }, () => empty),
+    restored: { bridge: false, pond: false, veg: false, tundra: false, taiga: false, steppe: false },
+    decor: { owned: {}, placed: [] }, collection: { daisy: { firstAt: now, count: 1 } }, golden: {}, guests: {}, order: null, ordersDone: 0, questIndex: 3,
+    stats: { planted: { daisy: 1 }, watered: 3, harvested: 1, sinceGolden: 0, sinceQuiz: 0 },
+    badges: [], quiz: { pending: false, solved: [], correct: 0, asked: 0 },
+    fair: { queue: 2, lastAt: now, solved: 0, firstTry: 0 },
+    settings: { sound: false },
+  };
+  await page.addInitScript((s) => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    localStorage.setItem('green-garden/save', s);
+  }, JSON.stringify(save));
+  await page.goto('/');
+  await noGuests(page);
+  await expect(page.locator('[data-fair]')).toHaveClass(/busy/);
+  await page.locator('[data-fair]').click({ force: true }); // the badge bobs
+  await expect(page.locator('.bubble')).toBeVisible();
+  await shots(page, '16-fair');
+  const answer = await page.evaluate(() => (window.__gardenApp as unknown as { fairTask: { problem: { answer: number } } }).fairTask.problem.answer);
+  await page.locator('.answer-input').fill(String(answer + 1));
+  await page.getByRole('button', { name: 'Проверить' }).click();
+  await expect(page.locator('.hint-box')).toContainText('Подсказка');
+  await page.locator('.answer-input').fill(String(answer));
+  await page.locator('.answer-input').press('Enter');
+  await expect(page.locator('.explain.ok')).toContainText('со второй попытки');
+  await expect(page.locator('.explain')).toContainText('Решение:');
+  await page.getByRole('button', { name: 'Следующий покупатель' }).click();
+  await expect(page.locator('.bubble')).toBeVisible();
+  const answer2 = await page.evaluate(() => (window.__gardenApp as unknown as { fairTask: { problem: { answer: number } } }).fairTask.problem.answer);
+  await page.locator('.answer-input').fill(String(answer2));
+  await page.getByRole('button', { name: 'Проверить' }).click();
+  await expect(page.locator('.explain.ok')).toContainText('Верно! +4');
+  await page.getByRole('button', { name: 'Готово' }).click();
+  await expect(page.locator('#petals')).toHaveText('16', { timeout: 5000 });
+  await expect(page.locator('[data-fair]')).not.toHaveClass(/busy/);
+  await page.locator('[data-fair]').click({ force: true }); // the badge bobs
+  await expect(page.getByRole('heading', { name: 'Покупателей пока нет' })).toBeVisible();
+});

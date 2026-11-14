@@ -36,6 +36,7 @@ import {
 import {
   advance,
   buyDecoration,
+  advanceFair,
   answerQuiz,
   checkQuests,
   checkQuiz,
@@ -43,8 +44,11 @@ import {
   currentQuest,
   ensureOrder,
   meetGuest,
+  nextCustomerIn,
   orderComplete,
   pickQuestion,
+  serveCustomer,
+  type FairResult,
   visitingGuests,
   decorAvailable,
   formatDuration,
@@ -75,10 +79,13 @@ import {
 } from '../game/save';
 import { BADGES, earned, newBadges } from '../game/badges';
 import type { Question } from '../game/quiz';
+import { fairLevel, makeProblem, type MathProblem } from '../game/math';
 import { ICONS, SHARED_DEFS, decoIcon, guestArt, guestIcon, listik, medalIcon, petalIcon, plantIcon, starIcon } from './art';
 import {
   BOARD,
   PLOTS,
+  STALL,
+  stallSVG,
   SLOTS,
   VEG_PLOTS,
   backSignSVG,
@@ -199,6 +206,8 @@ export class App {
   private view: AreaId = 'garden';
   private phase: DayPhase = 'day';
   private question: Question | null = null;
+  /** The problem of the customer at the front of the queue (kept while the sheet is reopened). */
+  private fairTask: { problem: MathProblem; guest: GuestId } | null = null;
   /** Short screens (iPhone SE): the quest card folds itself after the first tap in the garden. */
   private compact = window.innerHeight < 700;
 
@@ -229,7 +238,7 @@ export class App {
 <section class="quest" id="quest" aria-live="polite"></section>
 <main class="stage" id="stage">
   <svg id="scene" viewBox="0 0 400 640" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Сад">
-    <g id="view-garden"><g id="l-bg">${backgroundSVG()}</g><g id="l-brook"></g><g id="l-pond"></g><g id="l-bridge"></g><g id="l-board"></g><g id="l-sign"></g><g id="l-wild"></g><g id="l-haze"></g><g id="l-objects"></g><g id="l-life"></g></g>
+    <g id="view-garden"><g id="l-bg">${backgroundSVG()}</g><g id="l-brook"></g><g id="l-pond"></g><g id="l-bridge"></g><g id="l-board"></g><g id="l-stall"></g><g id="l-sign"></g><g id="l-wild"></g><g id="l-haze"></g><g id="l-objects"></g><g id="l-life"></g></g>
     <g id="view-veg" style="display:none"><g id="v-bg">${vegBackgroundSVG()}</g><g id="v-sign">${backSignSVG()}</g><g id="v-objects"></g></g>
     ${ZONE_IDS.map((z) => `<g id="view-${z}" style="display:none"><g>${zoneBackgroundSVG(z)}</g><g>${zoneBackSignSVG()}</g><g id="${z}-objects"></g></g>`).join('')}
     <g id="l-guest"></g>
@@ -356,6 +365,9 @@ export class App {
   private refresh(greet: boolean) {
     const now = this.now();
     const changes = advance(this.state, now);
+    const queueBefore = this.state.fair.queue;
+    advanceFair(this.state, now);
+    if (this.state.fair.queue !== queueBefore) this.persist();
     if (changes.length) {
       const done = checkQuests(this.state, now);
       this.persist();
@@ -371,12 +383,19 @@ export class App {
     const done = checkQuests(this.state, now);
     const newOrder = ensureOrder(this.state, Math.random);
     const quiz = checkQuiz(this.state);
+    const fairOpened = advanceFair(this.state, now);
     const badges = newBadges(this.state);
     this.persist();
     this.render();
     if (done.length) window.setTimeout(() => this.showQuestDone(done), 650);
     if (quiz) window.setTimeout(() => this.toast('У Листика есть вопрос для тебя! Нажми на Листика вверху.'), done.length ? 1600 : 500);
     for (const b of badges) window.setTimeout(() => this.toast(`Новый значок: «${b.name}»!`), 900);
+    if (fairOpened) {
+      window.setTimeout(() => {
+        this.toast('Листик: у забора открылась Ярмарка урожая! К прилавку приходят покупатели — помоги им посчитать.');
+        this.fx(ringFx(STALL.x, STALL.y - 40, '#FFF3B8', 40));
+      }, done.length ? 2200 : 600);
+    }
     if (newOrder && this.state.ordersDone === 0) {
       window.setTimeout(() => {
         this.toast('Листик: на доске у пруда появилась первая просьба от гостя! Загляни.');
@@ -429,6 +448,7 @@ export class App {
     $(this.root, '#petals').textContent = String(this.shownPetals);
     this.setLayer('brook', $(this.root, '#l-brook'), brookSVG(s.restored.pond));
     this.setLayer('board', $(this.root, '#l-board'), boardSVG(s));
+    this.setLayer('stall', $(this.root, '#l-stall'), stallSVG(s));
     this.setLayer('sign', $(this.root, '#l-sign'), vegSignSVG(s.restored.veg, landmarkAvailable(s, 'veg')));
     if (this.view !== 'garden' && !s.restored[this.view]) this.view = 'garden';
     for (const a of ['garden', 'veg', ...ZONE_IDS] as AreaId[]) $(this.root, `#view-${a}`).style.display = this.view === a ? '' : 'none';
@@ -617,6 +637,7 @@ export class App {
     if (go && this.mode === 'garden') return this.onSign(go.dataset.go as AreaId);
     if (slot && this.mode === 'decor') return this.onSlot(Number(slot.dataset.slot));
     if (t.closest('[data-board]') && this.mode === 'garden') return this.showOrderSheet();
+    if (t.closest('[data-fair]') && this.mode === 'garden') return this.showFair();
     if (plot) return this.onPlot(Number(plot.dataset.plot));
     if (lm) return this.onLandmark(lm.dataset.landmark as Landmark);
   }
@@ -1024,6 +1045,97 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
         this.bumpPetals();
       }),
     );
+  }
+
+  // ------------------------------------------------------------ fair (math)
+
+  private showFair() {
+    const s = this.state;
+    const now = this.now();
+    advanceFair(s, now);
+    play('tap');
+    const level = fairLevel(s.fair.solved);
+    if (s.fair.queue <= 0) {
+      this.openSheet(`<div class="sheet-hero">${listik(64)}</div><p class="eyebrow">Ярмарка урожая · уровень ${level}</p><h2>Покупателей пока нет</h2><p>Следующий придёт примерно через ${nextCustomerIn(s, now)} мин. А пока можно поливать и собирать урожай!</p><p class="muted">Решено задач: ${s.fair.solved}, с первой попытки: ${s.fair.firstTry}.</p>`);
+      return;
+    }
+    if (!this.fairTask) {
+      const pool = GUEST_IDS.filter((id) => GUESTS[id].area === 'garden' || s.guests[id]);
+      const guest = pool[Math.floor(Math.random() * pool.length)];
+      this.fairTask = { guest, problem: makeProblem(level, Math.random, GUESTS[guest].name) };
+    }
+    const { problem: p, guest } = this.fairTask;
+    let tries = 0;
+    let hinted = false;
+    let done = false;
+    const sheet = this.openSheet(`<div class="fair-head">${guestIcon(guest, 84)}<div><p class="eyebrow">Ярмарка урожая · уровень ${level}</p><p class="small muted">Покупателей ждёт: ${s.fair.queue}</p></div></div>
+<div class="bubble">${p.text}</div>
+<form class="answer-row" data-form>
+  <input class="answer-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Ответ" placeholder="?">
+  <span class="unit">${p.unit}</span>
+</form>
+<div class="fair-buttons"><button type="button" class="btn ghost" data-act="hint">Подсказка</button><button type="button" class="btn primary" data-act="check">Проверить</button></div>
+<div data-result></div>`);
+    const input = $<HTMLInputElement>(sheet, '.answer-input');
+    const result = $(sheet, '[data-result]');
+    const finish = (r: FairResult) => {
+      done = true;
+      const served = serveCustomer(this.state, r, this.now());
+      this.fairTask = null;
+      if (!served.ok) return;
+      input.disabled = true;
+      sheet.querySelectorAll<HTMLButtonElement>('.fair-buttons .btn').forEach((b) => (b.disabled = true));
+      const more = this.state.fair.queue > 0;
+      const title =
+        r === 'failed'
+          ? `Правильный ответ: ${p.answerText}. +${served.petals} за старание`
+          : r === 'first'
+            ? `Верно! +${served.petals}`
+            : `Верно, со второй попытки! +${served.petals}`;
+      result.innerHTML = `<div class="explain ${r === 'failed' ? 'try' : 'ok'}"><b>${title}</b><p>Решение: ${p.solution}</p><button type="button" class="btn primary wide" data-act="next">${more ? 'Следующий покупатель' : 'Готово'}</button></div>`;
+      play(r === 'failed' ? 'tap' : 'quest');
+      if (r === 'first') this.confetti();
+      this.commit();
+      this.bumpPetals();
+      $(result, '[data-act="next"]').addEventListener('click', () => {
+        this.closeSheet();
+        if (more) window.setTimeout(() => this.showFair(), 150);
+      });
+    };
+    const showHint = (lead: string) => {
+      hinted = true;
+      const box = document.createElement('p');
+      box.className = 'hint-box';
+      box.textContent = `${lead}${p.hint}`;
+      result.replaceChildren(box);
+    };
+    const check = () => {
+      if (done) return;
+      const raw = input.value.replace(/\s/g, '');
+      if (!/^\d+$/.test(raw)) {
+        input.classList.remove('shake');
+        void input.offsetWidth;
+        input.classList.add('shake');
+        input.focus();
+        return;
+      }
+      if (Number(raw) === p.answer) return finish(tries === 0 && !hinted ? 'first' : 'second');
+      tries += 1;
+      if (tries >= 2) return finish('failed');
+      play('error');
+      showHint('Не совсем. Подсказка: ');
+      input.select();
+    };
+    $(sheet, '[data-form]').addEventListener('submit', (e) => {
+      e.preventDefault();
+      check();
+    });
+    $(sheet, '[data-act="check"]').addEventListener('click', check);
+    $(sheet, '[data-act="hint"]').addEventListener('click', () => {
+      if (!done && !hinted) showHint('Подсказка: ');
+      input.focus();
+    });
+    window.setTimeout(() => input.focus(), 250);
   }
 
   // ------------------------------------------------------------ photo

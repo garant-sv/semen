@@ -1826,3 +1826,105 @@ button.card:active {
 .g-eagle .guest-move {
   animation: hover 3.2s ease-in-out infinite;
 }
+
+/* ------------------------------------------------------------ v0.5: harvest fair (math) */
+
+.stall {
+  cursor: pointer;
+}
+
+.fair-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-right: 52px;
+}
+
+.fair-head .eyebrow {
+  margin-bottom: 2px !important;
+}
+
+.bubble {
+  position: relative;
+  margin: 12px 0 10px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: #fff;
+  border: 2px solid var(--cream-3);
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.bubble::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 34px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-left: 2px solid var(--cream-3);
+  border-top: 2px solid var(--cream-3);
+  transform: rotate(45deg);
+}
+
+.answer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 10px;
+}
+
+.answer-input {
+  flex: 1;
+  min-width: 0;
+  height: 60px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 3px solid #b9dc98;
+  background: #fff;
+  font: inherit;
+  font-size: 28px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--ink);
+}
+
+.answer-input:focus {
+  outline: none;
+  border-color: var(--green);
+}
+
+.answer-input.shake {
+  animation: shake 0.4s ease;
+}
+
+.unit {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.fair-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 10px;
+}
+
+.hint-box {
+  margin: 12px 0 0 !important;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #fff3dc;
+  font-size: 16px !important;
+  animation: rise 0.25s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  50% { transform: translateX(8px); }
+  75% { transform: translateX(-4px); }
+}

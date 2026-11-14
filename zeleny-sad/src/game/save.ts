@@ -61,7 +61,8 @@ type Raw = Record<string, unknown>;
  * v2 — settings.sound, stats.planted / stats.watered, plot.plantedAt.
  * v3 — garden guests, golden flowers (plot.golden, golden, stats.sinceGolden), orders.
  * v4 — vegetable patch (4 more plots, restored.veg), badges, Listik's questions (quiz, stats.sinceQuiz).
- * v5 — current: natural zones (tundra, taiga, steppe): 9 more plots, restored.<zone>.
+ * v5 — natural zones (tundra, taiga, steppe): 9 more plots, restored.<zone>.
+ * v6 — current: «Ярмарка урожая» (fair: queue, lastAt, solved, firstTry).
  */
 export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
   1: (raw) => {
@@ -114,6 +115,7 @@ export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
     const restored = (raw.restored as Raw | undefined) ?? {};
     return { ...raw, version: 5, restored: { ...restored, tundra: false, taiga: false, steppe: false } };
   },
+  5: (raw) => ({ ...raw, version: 6, fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 } }),
 };
 
 export function migrate(raw: Raw): { data: Raw; from: number } {
@@ -227,6 +229,13 @@ export function sanitize(raw: Raw, now: number): GameState {
   s.stats.sinceQuiz = Math.floor(num(stats.sinceQuiz, 0, 0, 1000));
 
   s.badges = Array.isArray(raw.badges) ? [...new Set(raw.badges.filter((b): b is string => BADGE_IDS.includes(b as string)))] : [];
+  const fair = isObj(raw.fair) ? raw.fair : {};
+  s.fair = {
+    queue: Math.floor(num(fair.queue, 0, 0, 3)),
+    lastAt: num(fair.lastAt, 0, 0),
+    solved: Math.floor(num(fair.solved, 0)),
+    firstTry: Math.floor(num(fair.firstTry, 0)),
+  };
   const quiz = isObj(raw.quiz) ? raw.quiz : {};
   const qids = QUESTIONS.map((q) => q.id);
   s.quiz = {

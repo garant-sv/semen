@@ -60,6 +60,7 @@ export const BADGES: Badge[] = [
     desc: 'Собери все 6 украшений',
     progress: (s) => count(DECO_IDS.filter((id) => s.decor.owned[id] > 0).length, DECO_IDS.length),
   },
+  { id: 'counter', name: 'Счетовод', desc: 'Реши 20 задач на ярмарке', progress: (s) => count(s.fair.solved, 20) },
   { id: 'scholar', name: 'Знаток природы', desc: 'Правильно ответь Листику 15 раз', progress: (s) => count(s.quiz.correct, 15) },
 ];
 
