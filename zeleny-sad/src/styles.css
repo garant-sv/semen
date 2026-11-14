@@ -2945,3 +2945,90 @@ button.card:active {
 .quest-card.collapsed .quest-avatar .speak {
   display: none;
 }
+
+/* ------------------------------------------------------------------ 0.8: pictures and the hint finger */
+.answers.with-pics .answer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+}
+
+.answer .pic {
+  flex: none;
+  font-size: 34px;
+  line-height: 1;
+  width: 42px;
+  text-align: center;
+}
+
+.fair-pic {
+  margin: 4px 0 12px;
+}
+
+.fair-pic.goods {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.fair-pic .good {
+  display: grid;
+  justify-items: center;
+  padding: 6px 6px 4px;
+  border-radius: 16px;
+  background: #fff;
+  border: 2px solid var(--cream-3);
+}
+
+.fair-pic .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.fair-pic.bed svg {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.finger-hand {
+  animation: fingerTap 1.1s ease-in-out infinite;
+}
+
+.finger-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fingerRing 1.1s ease-out infinite;
+}
+
+@keyframes fingerTap {
+  0%,
+  100% {
+    transform: translate(6px, -12px);
+  }
+  45%,
+  60% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes fingerRing {
+  0%,
+  45% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}

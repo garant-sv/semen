@@ -19,6 +19,7 @@ import {
   ZONE_IDS,
   plantArea,
   plotArea,
+  areaPlots,
   QUESTS,
   SLOT_COUNT,
   type DecoId,
@@ -456,6 +457,16 @@ export const youngMode = (s: GameState): boolean => s.profile.grade !== null && 
 
 /** Large text is on by class unless the player switched it in the Menu. */
 export const bigTextOn = (s: GameState): boolean => s.settings.bigText ?? youngMode(s);
+
+/**
+ * «Подсказывающий пальчик»: the bed in this area the child would most likely tap next —
+ * a ripe plant first, then one waiting for water, then an empty bed when nothing is growing.
+ */
+export function nextTap(s: GameState, now: number, area: AreaId): number | null {
+  const beds = areaPlots(area).filter((i) => plotStatus(s, i, now) !== 'locked');
+  const first = (st: PlotStatus) => beds.find((i) => plotStatus(s, i, now) === st) ?? null;
+  return first('ready') ?? first('thirsty') ?? (beds.some((i) => plotStatus(s, i, now) === 'growing') ? null : first('empty'));
+}
 
 /** Listik reads aloud by class unless the player switched it in the Menu. */
 export const voiceOn = (s: GameState): boolean => s.settings.voice ?? youngMode(s);

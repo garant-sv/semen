@@ -680,3 +680,49 @@ export const SHARED_DEFS = `<svg width="0" height="0" style="position:absolute" 
 <filter id="fGold" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0.55 0.5 0.1 0 0.22  0.42 0.42 0.08 0 0.14  0.12 0.14 0.05 0 0.02  0 0 0 1 0"/></filter>
 <radialGradient id="gDryPond"><stop offset="0" stop-color="#C79C6C"/><stop offset="1" stop-color="#A27449"/></radialGradient>
 </defs></svg>`;
+
+// ---------------------------------------------------------------- 0.8: pictures for 2–3 class
+
+/** «Подсказывающий пальчик»: a hand that taps the spot (tip at 0,0), drawn inside the scene. */
+export function fingerSVG(x: number, y: number): string {
+  return `<g class="finger" transform="translate(${x} ${y})" pointer-events="none" aria-hidden="true">
+<circle class="finger-ring" r="16" fill="none" stroke="#FFF6E3" stroke-width="3"/>
+<g class="finger-hand"><g transform="rotate(-18)">
+<rect x="-6.5" y="-4" width="13" height="38" rx="6.5" fill="#FFE0C4" stroke="#8A5A3C" stroke-width="2"/>
+<rect x="-6" y="24" width="34" height="30" rx="12" fill="#FFE0C4" stroke="#8A5A3C" stroke-width="2"/>
+<path d="M6 30 v10 M15 30 v10 M23 32 v8" stroke="#C9926B" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="-6" y="40" width="10" height="16" rx="5" fill="#FFE0C4" stroke="#8A5A3C" stroke-width="2" transform="rotate(30 -1 48)"/>
+<path d="M-3 2 h6" stroke="#E8B898" stroke-width="2" stroke-linecap="round"/>
+</g></g></g>`;
+}
+
+type FairPic = { kind: 'goods'; art: PlantId; count: number; price: number } | { kind: 'bed'; a: number; b: number };
+
+/** Picture for a fair problem: the goods with price tags, or the bed with its sides signed. */
+export function fairPicHTML(pic: FairPic): string {
+  if (pic.kind === 'goods') {
+    // A carrot grows underground, so on the market stall it is drawn pulled out.
+    const art =
+      pic.art === 'carrot'
+        ? `<svg class="icon-svg" viewBox="-20 -26 40 52" width="52" height="52" aria-hidden="true"><path d="M-2 -14 q-10 -10 -6 -16 q6 4 7 12 M2 -14 q2 -12 9 -14 q1 8 -6 14 M0 -14 q0 -10 2 -12" fill="#6EA650" stroke="#4C8A3A" stroke-width="1.4"/><path d="M-9 -14 Q0 -18 9 -14 Q6 6 0 24 Q-6 6 -9 -14Z" fill="#F08A2C" stroke="#B85E17" stroke-width="1.6" stroke-linejoin="round"/><path d="M-5 -4 h4 M2 4 h4 M-3 12 h3" stroke="#B85E17" stroke-width="1.4" stroke-linecap="round"/></svg>`
+        : plantIcon(pic.art, 3, 52);
+    const one = `<span class="good">${art}<span class="tag">${pic.price}${petalIcon(15)}</span></span>`;
+    return `<div class="fair-pic goods" aria-hidden="true">${Array.from({ length: pic.count }, () => one).join('')}</div>`;
+  }
+  // The rectangle keeps the real proportions (within reason), so a long bed looks long.
+  const W = 200;
+  const ratio = Math.max(0.3, Math.min(1, pic.b / pic.a));
+  const w = pic.a >= pic.b ? W : W * (pic.a / pic.b);
+  const h = pic.a >= pic.b ? W * ratio * 0.55 : W * 0.55;
+  const x0 = (300 - w) / 2;
+  const y0 = 24;
+  let rows = '';
+  for (let k = 1; k < 4; k++) rows += `<path d="M${x0 + 8} ${y0 + (h * k) / 4} H${x0 + w - 8}" stroke="#7A5134" stroke-width="1.4" opacity=".35"/>`;
+  return `<div class="fair-pic bed" aria-hidden="true"><svg viewBox="0 0 300 ${h + 40}">
+<rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="8" fill="#B88A5E" stroke="#6B4A2E" stroke-width="3"/>${rows}
+<text x="150" y="${y0 - 6}" text-anchor="middle" font-size="16" font-weight="800" fill="#3F3326">${pic.a} м</text>
+<text x="150" y="${y0 + h + 20}" text-anchor="middle" font-size="16" font-weight="800" fill="#3F3326">${pic.a} м</text>
+<text x="${x0 - 6}" y="${y0 + h / 2 + 5}" text-anchor="end" font-size="16" font-weight="800" fill="#3F3326">${pic.b} м</text>
+<text x="${x0 + w + 6}" y="${y0 + h / 2 + 5}" font-size="16" font-weight="800" fill="#3F3326">${pic.b} м</text>
+</svg></div>`;
+}

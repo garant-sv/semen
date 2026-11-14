@@ -58,6 +58,7 @@ import {
   bigTextOn,
   voiceOn,
   youngMode,
+  nextTap,
   setProfile,
   gardenProgress,
   goalDone,
@@ -88,7 +89,7 @@ import { BADGES, earned, newBadges } from '../game/badges';
 import type { Question } from '../game/quiz';
 import { fairLevel, makeProblem, type MathProblem } from '../game/math';
 import { NO_LETTER, RULES, WORDS, viewWord, type RuleId } from '../game/russian';
-import { ICONS, SHARED_DEFS, decoIcon, gradeIcon, guestArt, guestIcon, listik, medalIcon, meetScene, petalIcon, plantIcon, starIcon } from './art';
+import { ICONS, SHARED_DEFS, decoIcon, fairPicHTML, fingerSVG, gradeIcon, guestArt, guestIcon, listik, medalIcon, meetScene, petalIcon, plantIcon, starIcon } from './art';
 import {
   BOARD,
   PLOTS,
@@ -186,6 +187,9 @@ function highlightWord(masked: string, answer: string): string {
   return `${escapeWord(masked.slice(0, k))}${ins}${escapeWord(masked.slice(k + 1))}`;
 }
 
+/** The hint finger shows up after this much quiet time. */
+const FINGER_AFTER_MS = 8000;
+
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 const $ = <T extends Element = HTMLElement>(root: ParentNode, sel: string) => root.querySelector(sel) as T;
@@ -231,6 +235,8 @@ export class App {
   private fairTask: { problem: MathProblem; guest: GuestId } | null = null;
   /** Short screens (iPhone SE): the quest card folds itself after the first tap in the garden. */
   private compact = window.innerHeight < 700;
+  /** Last touch anywhere: the hint finger waits for a quiet moment. */
+  private lastTouchAt = 0;
   /** «Живое 2,5D»: parallax of the scene layers. */
   private depth!: Depth;
 
@@ -266,6 +272,7 @@ export class App {
     ${ZONE_IDS.map((z) => `<g id="view-${z}" style="display:none"><g>${zoneBackgroundSVG(z)}</g><g>${zoneBackSignSVG()}</g><g id="${z}-objects"></g></g>`).join('')}
     <g id="l-guest"></g>
     <g id="l-front" data-z="near"></g>
+    <g id="l-hint"></g>
     <g id="l-sky"></g><g id="l-lights"></g><g id="l-fx"></g>
   </svg>
   <div class="mode-chip" id="modeChip" hidden></div>
@@ -305,6 +312,15 @@ export class App {
     }
 
     $(this.root, '#scene').addEventListener('click', (e) => this.onSceneClick(e));
+    this.lastTouchAt = this.now();
+    this.root.addEventListener(
+      'pointerdown',
+      () => {
+        this.lastTouchAt = this.now();
+        if (this.cache.get('hint')) this.setLayer('hint', $(this.root, '#l-hint'), '');
+      },
+      { capture: true, passive: true },
+    );
     this.root.addEventListener('click', (e) => {
       const b = (e.target as Element).closest<HTMLElement>('[data-say]');
       if (!b) return;
@@ -511,6 +527,7 @@ export class App {
     this.setLayer('haze', $(this.root, '#l-haze'), hazeSVG(progress));
     this.setLayer('life', $(this.root, '#l-life'), lifeSVG(s));
     this.setLayer('front', $(this.root, '#l-front'), frontSVG(this.view));
+    this.setLayer('hint', $(this.root, '#l-hint'), this.fingerHint(now));
     for (let i = 0; i < TOTAL_PLOTS; i++) {
       this.setLayer(`plot-${i}`, this.wraps.get(`plot-${i}-main`)!, plotSVG(s, i, now));
       this.setLayer(`bar-${i}`, this.wraps.get(`plot-${i}-bar`)!, plotBarSVG(s, i, now));
@@ -1086,8 +1103,12 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     play('tap');
     const options = [...q.options].sort(() => Math.random() - 0.5);
     const spoken = `${q.text} Варианты ответа: ${options.join('. ')}.`;
+    // 2–3 class: options with pictures where the question has them.
+    const pics = youngMode(s) && q.pics ? q.pics : null;
     const sheet = this.openSheet(`<div class="sheet-hero hero-hop">${listik(64, 'wow')}</div><p class="eyebrow">Вопрос Листика · ${q.topic}</p><h2>${q.text}${this.speakBtn(spoken)}</h2>
-<div class="answers">${options.map((o, i) => `<button type="button" class="btn wide answer" data-answer="${i}">${o}</button>`).join('')}</div>
+<div class="answers${pics ? ' with-pics' : ''}">${options
+      .map((o, i) => `<button type="button" class="btn wide answer" data-answer="${i}">${pics ? `<span class="pic" aria-hidden="true">${pics[q.options.indexOf(o)]}</span>` : ''}<span>${o}</span></button>`)
+      .join('')}</div>
 <p class="muted small center">Это из «Окружающего мира» за ${gradeOf(this.state)} класс. Ошибиться не страшно — Листик подскажет.</p>`);
     this.autoSay(spoken);
     sheet.querySelectorAll<HTMLButtonElement>('[data-answer]').forEach((b) =>
@@ -1188,6 +1209,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     let done = false;
     const sheet = this.openSheet(`<div class="fair-head">${guestIcon(guest, 84)}<div><p class="eyebrow">Ярмарка урожая · уровень ${level}</p><p class="small muted">Покупателей ждёт: ${s.fair.queue}</p></div></div>
 <div class="bubble">${p.text}${this.speakBtn(p.text)}</div>
+${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
 <form class="answer-row" data-form>
   <input class="answer-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Ответ" placeholder="?">
   <span class="unit">${p.unit}</span>
@@ -1551,6 +1573,20 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       void this.takePhoto();
     });
     $(sheet, '[data-act="reset"]').addEventListener('click', () => this.confirmReset());
+  }
+
+  /**
+   * «Подсказывающий пальчик» (2–3 class): after a few quiet seconds in the garden, a finger
+   * taps the bed the child could use next. Any touch hides it.
+   */
+  private fingerHint(now: number): string {
+    const s = this.state;
+    if (!youngMode(s) || this.mode !== 'garden' || !$(this.root, '#sheetBackdrop').hidden) return '';
+    if (now - this.lastTouchAt < FINGER_AFTER_MS) return '';
+    const i = nextTap(s, now, this.view);
+    if (i === null) return '';
+    const pos = plotPos(i);
+    return fingerSVG(pos.x + 6, pos.y - 14);
   }
 
   /** «Послушать» button: Listik reads the text aloud. Empty when reading aloud is off. */

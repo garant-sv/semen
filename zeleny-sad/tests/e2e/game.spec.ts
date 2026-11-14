@@ -627,3 +627,63 @@ test('Listik reads aloud: on for 2 class, button reads the quest, switch in Menu
   await page.locator('.sheet-close').click();
   await expect(page.locator('#quest .speak')).toHaveCount(0);
 });
+
+test('2–3 class: hint finger after a quiet moment, fair problem with a picture, quiz with pictures', async ({ page }) => {
+  const now = new Date('2026-11-01T12:00:00').getTime();
+  await page.clock.install({ time: now });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await noGuests(page);
+  const finger = page.locator('#l-hint .finger');
+  await expect(finger).toHaveCount(0);
+  await page.clock.runFor(10_000);
+  await expect(finger).toHaveCount(1);
+  // It points at the first empty bed (task 1: plant a daisy).
+  const f = (await finger.boundingBox())!;
+  const bed = (await page.locator('[data-plot="0"]').boundingBox())!;
+  expect(f.x + f.width / 2).toBeGreaterThan(bed.x);
+  expect(f.x).toBeLessThan(bed.x + bed.width);
+  await shots(page, '25-finger');
+  await page.locator('#stage').dispatchEvent('pointerdown');
+  await expect(finger).toHaveCount(0);
+
+  // Fair: a 2nd-grade problem about buying shows the goods with price tags.
+  await page.evaluate(() => {
+    const app = window.__gardenApp as unknown as {
+      state: { questIndex: number; fair: { queue: number } };
+      fairTask: unknown;
+      showFair: () => void;
+    };
+    app.state.questIndex = 3;
+    app.state.fair.queue = 1;
+    app.fairTask = {
+      guest: 'hedgehog',
+      problem: {
+        kind: 'cost', text: 'Ёжик: «Мне, пожалуйста, 3 морковки по 4 лепестка. Сколько с меня?»', answer: 12, unit: 'лепестков',
+        answerText: '12 лепестков', hint: 'Цена × количество.', solution: '4 × 3 = 12',
+        pic: { kind: 'goods', art: 'carrot', count: 3, price: 4 },
+      },
+    };
+    app.showFair();
+  });
+  await expect(page.locator('.fair-pic .good')).toHaveCount(3);
+  await page.waitForTimeout(400);
+  await shots(page, '26-fair-pic');
+  await page.locator('.sheet-close').click();
+
+  // Quiz: options with pictures.
+  await page.evaluate(() => {
+    const app = window.__gardenApp as unknown as { state: { quiz: { pending: boolean } }; question: unknown; render: () => void };
+    app.state.quiz.pending = true;
+    app.question = {
+      id: 'g2-pets', topic: 'Животные', grades: [2, 3], text: 'Какое животное — домашнее?',
+      options: ['Корова', 'Лиса', 'Ёж'], pics: ['🐄', '🦊', '🦔'], explain: 'Корову держит человек.',
+    };
+    app.render();
+  });
+  await page.locator('#listikBtn').click();
+  await expect(page.locator('.answers.with-pics .answer .pic')).toHaveCount(3);
+  await page.waitForTimeout(400);
+  await shots(page, '27-quiz-pics');
+});

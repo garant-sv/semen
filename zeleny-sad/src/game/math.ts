@@ -15,23 +15,29 @@ export interface MathProblem {
   answerText: string;
   hint: string;
   solution: string;
+  /** 0.8: a picture for 2–3 class — what is bought and for how much, or the bed's sides. */
+  pic?: { kind: 'goods'; art: FairArt; count: number; price: number } | { kind: 'bed'; a: number; b: number };
 }
+
+/** Plants drawn on the fair's picture cards (ids from the game's own art). */
+export type FairArt = 'carrot' | 'pumpkin' | 'strawberry' | 'daisy' | 'tulip' | 'lavender' | 'sunflower';
 
 export interface FairGood {
   /** Accusative after a number: 1, 2–4, 5+. */
   forms: [string, string, string];
   /** Price range at the first level. */
   price: [number, number];
+  art: FairArt;
 }
 
 export const FAIR_GOODS: FairGood[] = [
-  { forms: ['морковку', 'морковки', 'морковок'], price: [2, 6] },
-  { forms: ['тыкву', 'тыквы', 'тыкв'], price: [7, 9] },
-  { forms: ['корзинку клубники', 'корзинки клубники', 'корзинок клубники'], price: [4, 8] },
-  { forms: ['букет ромашек', 'букета ромашек', 'букетов ромашек'], price: [3, 7] },
-  { forms: ['тюльпан', 'тюльпана', 'тюльпанов'], price: [3, 8] },
-  { forms: ['пучок лаванды', 'пучка лаванды', 'пучков лаванды'], price: [4, 9] },
-  { forms: ['подсолнух', 'подсолнуха', 'подсолнухов'], price: [3, 9] },
+  { forms: ['морковку', 'морковки', 'морковок'], price: [2, 6], art: 'carrot' },
+  { forms: ['тыкву', 'тыквы', 'тыкв'], price: [7, 9], art: 'pumpkin' },
+  { forms: ['корзинку клубники', 'корзинки клубники', 'корзинок клубники'], price: [4, 8], art: 'strawberry' },
+  { forms: ['букет ромашек', 'букета ромашек', 'букетов ромашек'], price: [3, 7], art: 'daisy' },
+  { forms: ['тюльпан', 'тюльпана', 'тюльпанов'], price: [3, 8], art: 'tulip' },
+  { forms: ['пучок лаванды', 'пучка лаванды', 'пучков лаванды'], price: [4, 9], art: 'lavender' },
+  { forms: ['подсолнух', 'подсолнуха', 'подсолнухов'], price: [3, 9], art: 'sunflower' },
 ];
 
 export const plural = (n: number, [one, few, many]: [string, string, string]) => {
@@ -126,6 +132,7 @@ function buildEasy(rand: () => number, who: string, kind: MathKind): Omit<MathPr
       unit: 'м',
       hint: 'Сложи длины всех четырёх сторон: две длины и две ширины.',
       solution: `${a} + ${b} + ${a} + ${b} = ${2 * (a + b)} м`,
+      pic: { kind: 'bed', a, b },
     };
   }
   if (kind === 'minutes') {
@@ -148,6 +155,7 @@ function buildEasy(rand: () => number, who: string, kind: MathKind): Omit<MathPr
     unit: 'лепестков',
     hint: 'Цена × количество. Можно и сложением: сложи цену столько раз, сколько покупок.',
     solution: `${p} × ${n} = ${n * p}`,
+    pic: { kind: 'goods', art: good.art, count: n, price: p },
   };
 }
 
@@ -173,6 +181,7 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
         unit: 'лепестков',
         hint: 'Стоимость = цена × количество.',
         solution: `${p} × ${n} = ${n * p}`,
+        ...(L <= 2 ? { pic: { kind: 'goods' as const, art: good.art, count: n, price: p } } : {}),
       };
     }
     case 'change': {
@@ -188,6 +197,7 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
         unit: 'лепестков',
         hint: 'Сначала найди стоимость покупки, потом вычти её из того, что тебе дали.',
         solution: `${p} × ${n} = ${cost}; ${paid} − ${cost} = ${paid - cost}`,
+        ...(L <= 2 ? { pic: { kind: 'goods' as const, art: good.art, count: n, price: p } } : {}),
       };
     }
     case 'canBuy': {
@@ -227,6 +237,7 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
         unit: 'м²',
         hint: 'Площадь прямоугольника = длина × ширина.',
         solution: `${a} × ${b} = ${a * b} м²`,
+        ...(L <= 2 ? { pic: { kind: 'bed' as const, a, b } } : {}),
       };
     }
     case 'perimeter': {
@@ -239,6 +250,7 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
         unit: 'м',
         hint: 'Периметр прямоугольника = (длина + ширина) × 2.',
         solution: `(${a} + ${b}) × 2 = ${2 * (a + b)} м`,
+        ...(L <= 2 ? { pic: { kind: 'bed' as const, a, b } } : {}),
       };
     }
     case 'bushes': {
