@@ -17,7 +17,7 @@
 curl -fsSL https://raw.githubusercontent.com/garant-sv/semen/main/deploy/zeleny-sad-install.sh | bash
 ```
 
-По умолчанию игра ставится на `zeleny-sad.pravlenie365.ru` (используется уже имеющийся wildcard-сертификат). Другой адрес — `DOMAIN=sad.example.ru` перед `bash`. Скрипт трогает только папку `/var/www/zeleny-sad` и один файл `/etc/nginx/sites-available/zeleny-sad.conf`, а перед перезагрузкой проверяет `nginx -t`.
+По умолчанию игра ставится на `sad.kvestapp.ru` (нужна A-запись `sad` → IP сервера; HTTPS-сертификат скрипт выпускает сам). Другой адрес — `DOMAIN=sad.example.ru` перед `bash`. Скрипт трогает только папку `/var/www/zeleny-sad` и один файл `/etc/nginx/sites-available/zeleny-sad.conf`, а перед перезагрузкой проверяет `nginx -t`.
 
 ## Собрать игру после изменений
 

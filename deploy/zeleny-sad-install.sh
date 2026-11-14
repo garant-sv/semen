@@ -12,9 +12,10 @@
 #   * перед перезагрузкой nginx проверяет конфигурацию (nginx -t); при ошибке убирает свою правку;
 #   * другие сайты, сертификаты, сервисы и базы данных на сервере не трогает.
 # Повторный запуск = обновление игры до последней версии из репозитория.
+# Адрес по умолчанию: sad.kvestapp.ru (нужна A-запись sad → IP сервера).
 set -euo pipefail
 
-DOMAIN="${DOMAIN:-zeleny-sad.pravlenie365.ru}"
+DOMAIN="${DOMAIN:-sad.kvestapp.ru}"
 REPO_TARBALL="${REPO_TARBALL:-https://codeload.github.com/garant-sv/semen/tar.gz/refs/heads/main}"
 ROOT=/var/www/zeleny-sad
 CONF_AVAIL=/etc/nginx/sites-available/zeleny-sad.conf
