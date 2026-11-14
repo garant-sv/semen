@@ -46,7 +46,7 @@ function petalRing(n: number, r: number, pw: number, pl: number, fill: string, s
 
 // ---------------------------------------------------------------- plants
 
-const BUD: Record<PlantId, string> = {
+const BUD: Partial<Record<PlantId, string>> = {
   daisy: '#FFFDF5',
   sunflower: '#F6BE3B',
   bellflower: '#8C92E6',
@@ -58,7 +58,7 @@ const BUD: Record<PlantId, string> = {
   pumpkin: '#F29A2E',
 };
 
-const BUD_HEIGHT: Record<PlantId, number> = {
+const BUD_HEIGHT: Partial<Record<PlantId, number>> = {
   daisy: 24,
   sunflower: 40,
   bellflower: 30,
@@ -82,7 +82,8 @@ function bud(p: PlantId) {
   if (p === 'carrot') return carrotYoung();
   if (p === 'strawberry') return strawberryBush(false);
   if (p === 'pumpkin') return pumpkinVine(false);
-  const h = BUD_HEIGHT[p];
+  if (!BUD[p]) return `<g transform="scale(.62)">${YOUNG[p]?.() ?? BLOOMS[p]()}</g>`;
+  const h = BUD_HEIGHT[p] ?? 28;
   const col = BUD[p];
   return `${shadow(14, 4.5, 1)}${stem(h, 3)}${leaf(0, -h * 0.35, 15, -160)}${leaf(0, -h * 0.55, 13, -25)}<g transform="translate(0 ${-h})"><path d="M0 -14 Q8 -6 5 2 Q0 4 -5 2 Q-8 -6 0 -14Z" fill="${col}" stroke="${C.ink}" stroke-opacity=".35" stroke-width=".8"/><path d="M-6 1 Q-2 -4 0 2 Q2 -4 6 1 Q0 5 -6 1Z" fill="${C.leaf}" stroke="${C.stemDark}" stroke-width=".7"/></g>`;
 }
@@ -117,8 +118,8 @@ function bellflower() {
   )}${bell(9, -44, 0.95)}${bell(20, -46, 0.85)}`;
 }
 
-function tulip() {
-  return `${shadow(16, 5, 1)}${stem(40, 2, 3.4)}<path d="M-2 0 Q-18 -14 -12 -34 Q-6 -16 -1 -4Z" fill="${C.leaf}" stroke="${C.stemDark}" stroke-width=".8"/><path d="M2 0 Q18 -12 13 -30 Q6 -14 1 -3Z" fill="${C.leafLight}" stroke="${C.stemDark}" stroke-width=".8"/><g transform="translate(0 -40)"><path d="M-10 0 Q-12 -14 -7 -22 L-3.5 -14 L0 -24 L3.5 -14 L7 -22 Q12 -14 10 0 Q0 6 -10 0Z" fill="#E5546B" stroke="#B83A52" stroke-width="1"/><path d="M-6 -3 Q-7 -10 -5 -15" stroke="#F59AAA" stroke-width="1.6" fill="none" stroke-linecap="round"/></g>`;
+function tulip(color = '#E5546B', edge = '#B83A52', shine = '#F59AAA') {
+  return `${shadow(16, 5, 1)}${stem(40, 2, 3.4)}<path d="M-2 0 Q-18 -14 -12 -34 Q-6 -16 -1 -4Z" fill="${C.leaf}" stroke="${C.stemDark}" stroke-width=".8"/><path d="M2 0 Q18 -12 13 -30 Q6 -14 1 -3Z" fill="${C.leafLight}" stroke="${C.stemDark}" stroke-width=".8"/><g transform="translate(0 -40)"><path d="M-10 0 Q-12 -14 -7 -22 L-3.5 -14 L0 -24 L3.5 -14 L7 -22 Q12 -14 10 0 Q0 6 -10 0Z" fill="${color}" stroke="${edge}" stroke-width="1"/><path d="M-6 -3 Q-7 -10 -5 -15" stroke="${shine}" stroke-width="1.6" fill="none" stroke-linecap="round"/></g>`;
 }
 
 function lavenderStalk(angle: number, h: number) {
@@ -227,11 +228,119 @@ function pumpkinVine(ripe: boolean) {
   return `${shadow(28, 7, 1)}${vine}${pumpkinLeaf(-22, -2, 1, -40)}${pumpkinLeaf(22, -4, 0.95, 40)}<g transform="translate(0 -2)"><ellipse cx="-11" cy="-12" rx="10" ry="12" fill="#E8862A" stroke="#A85A16" stroke-width="1"/><ellipse cx="11" cy="-12" rx="10" ry="12" fill="#E8862A" stroke="#A85A16" stroke-width="1"/><ellipse cx="0" cy="-13" rx="11" ry="13.4" fill="#F29A2E" stroke="#A85A16" stroke-width="1.1"/><path d="M-5 -24 Q-7 -13 -5 -1 M5 -24 Q7 -13 5 -1" stroke="#C9701E" stroke-width="1" fill="none"/><ellipse cx="-4" cy="-19" rx="3" ry="4.6" fill="#FFC27A" opacity=".55"/><path d="M0 -25 Q1 -31 4 -33" stroke="#6B5A2E" stroke-width="3" fill="none" stroke-linecap="round"/></g>`;
 }
 
+// ---------------------------------------------------------------- natural zones: plants
+
+function cloudberry(ripe = true) {
+  const leafK = (x: number, y: number, s2: number, a: number) =>
+    `<g transform="translate(${x} ${y}) rotate(${a}) scale(${s2})"><path d="M0 0 C-12 -2 -14 -14 -6 -18 C-3 -20 -1 -17 0 -19 C1 -17 3 -20 6 -18 C14 -14 12 -2 0 0Z" fill="#7FAE58" stroke="${C.stemDark}" stroke-width=".9"/><path d="M0 0 L0 -16 M0 -7 L-7 -13 M0 -7 L7 -13" stroke="#A9CF85" stroke-width=".8" fill="none"/></g>`;
+  let berry = '';
+  if (ripe) {
+    for (const [x, y] of [[0, 0], [-3, -2], [3, -2], [-2, -5], [2, -5], [0, -3], [0, -7], [-4, -5.5], [4, -5.5]]) {
+      berry += `<circle cx="${x}" cy="${y}" r="2.4" fill="#F2A541" stroke="#C97A1E" stroke-width=".6"/>`;
+    }
+    berry = `<g transform="translate(2 -26)">${berry}<path d="M-4 -9 L0 -11 L4 -9" stroke="${C.stemDark}" stroke-width="1.2" fill="none"/></g>`;
+  }
+  return `${shadow(16, 4.5, 1)}${leafK(-9, 0, 0.9, -30)}${leafK(10, 0, 0.85, 30)}<path d="M2 0 Q0 -14 2 -24" stroke="${C.stem}" stroke-width="1.8" fill="none"/>${berry}`;
+}
+
+function dwarfbirch() {
+  const twigs = ['M0 0 Q-6 -10 -18 -14', 'M0 0 Q2 -12 -4 -24', 'M0 0 Q8 -8 18 -16', 'M-8 -8 Q-14 -18 -10 -26', 'M6 -6 Q10 -18 8 -26'];
+  const leaves = [
+    [-18, -14], [-14, -18], [-4, -24], [-10, -26], [-1, -18], [18, -16], [13, -12], [8, -26], [11, -21], [-20, -9], [4, -14],
+  ]
+    .map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="3.4" fill="${i % 4 === 0 ? '#E0A23A' : i % 3 ? '#7FAE58' : '#9CC56F'}" stroke="${C.stemDark}" stroke-width=".6"/>`)
+    .join('');
+  return `${shadow(22, 5, 1)}${twigs.map((d) => `<path d="${d}" stroke="#6B4A2E" stroke-width="2" fill="none" stroke-linecap="round"/>`).join('')}${leaves}`;
+}
+
+function lichenTuft(x: number, h: number, s2: number) {
+  const tips = [
+    [-6, -h * 0.8], [-2, -h], [3, -h * 0.9], [7, -h * 0.7], [-8, -h * 0.5], [9, -h * 0.45],
+  ];
+  return `<g transform="translate(${x} 0) scale(${s2})">${tips
+    .map(([tx, ty]) => `<path d="M0 0 Q${tx / 2} ${ty / 2} ${tx} ${ty}" stroke="#C9CDB2" stroke-width="2.6" fill="none" stroke-linecap="round"/><circle cx="${tx}" cy="${ty}" r="2" fill="#E3E6D0" stroke="#A4A88A" stroke-width=".6"/>`)
+    .join('')}</g>`;
+}
+
+function lichen() {
+  return `${shadow(20, 5, 1)}<ellipse cx="0" cy="0" rx="18" ry="4" fill="#A4A88A" opacity=".5"/>${lichenTuft(-10, 16, 1)}${lichenTuft(8, 20, 1.05)}${lichenTuft(-1, 13, 0.9)}`;
+}
+
+function glossyLeaf(x: number, y: number, a: number, s2 = 1) {
+  return `<ellipse cx="0" cy="-4" rx="2.8" ry="4.6" fill="#3F7A3A" stroke="#2C5A28" stroke-width=".6" transform="translate(${x} ${y}) rotate(${a}) scale(${s2})"/>`;
+}
+
+function lingonberry() {
+  let out = `${shadow(18, 4.5, 1)}`;
+  out += ['M0 0 Q-6 -8 -14 -14', 'M0 0 Q0 -12 2 -22', 'M0 0 Q8 -8 14 -16']
+    .map((d) => `<path d="${d}" stroke="#6B4A2E" stroke-width="1.4" fill="none"/>`)
+    .join('');
+  for (const [x, y, a] of [[-14, -14, -50], [-9, -10, -20], [2, -22, 0], [0, -14, 30], [14, -16, 40], [9, -10, 60], [-4, -18, -30]]) out += glossyLeaf(x, y, a);
+  for (const [x, y] of [[-6, -6], [-3, -5], [-4.5, -8.5], [7, -5], [10, -6], [8.5, -9]]) out += `<circle cx="${x}" cy="${y}" r="2.6" fill="#D8303A" stroke="#8E1F25" stroke-width=".6"/><circle cx="${x - 0.8}" cy="${y - 0.9}" r=".7" fill="#fff" opacity=".7"/>`;
+  return out;
+}
+
+function cedar() {
+  const tier = (y: number, w: number) => `<path d="M${-w} ${y} Q0 ${y - 14} ${w} ${y} Q0 ${y - 4} ${-w} ${y}Z" fill="#2F6A3A" stroke="#1F4A28" stroke-width=".9"/>`;
+  return `${shadow(20, 5, 1)}<rect x="-2.2" y="-14" width="4.4" height="14" fill="#6B4A2E"/>${tier(-10, 20)}${tier(-22, 17)}${tier(-34, 13)}${tier(-45, 9)}<path d="M-4 -46 L0 -60 L4 -46Z" fill="#2F6A3A" stroke="#1F4A28" stroke-width=".9"/><g fill="#8D5A2E" stroke="#5E3B1E" stroke-width=".7"><ellipse cx="-9" cy="-26" rx="3.4" ry="4.6"/><ellipse cx="8" cy="-36" rx="3" ry="4.2"/></g><path d="M-11 -27 h4 M6 -37 h4" stroke="#5E3B1E" stroke-width=".6"/>`;
+}
+
+function blueberry() {
+  let out = `${shadow(18, 4.5, 1)}`;
+  out += ['M0 0 Q-8 -8 -16 -12', 'M0 0 Q-1 -14 -2 -24', 'M0 0 Q8 -10 16 -14']
+    .map((d) => `<path d="${d}" stroke="#4E8A3A" stroke-width="1.5" fill="none"/>`)
+    .join('');
+  for (const [x, y, a] of [[-16, -12, -60], [-10, -10, -20], [-2, -24, 0], [-1, -16, 25], [16, -14, 50], [9, -10, 70]]) out += leaf(x, y, 7, a - 90, C.leafLight, false);
+  for (const [x, y] of [[-7, -6], [-11, -8], [6, -6], [10, -9], [-2, -10]]) out += `<circle cx="${x}" cy="${y}" r="2.9" fill="#3B4F8C" stroke="#232F57" stroke-width=".6"/><path d="M${x - 1} ${y - 2.2} h2" stroke="#8C9CD6" stroke-width=".9"/>`;
+  return out;
+}
+
+function feathergrass() {
+  const blades = [-14, -8, -3, 2, 7, 12]
+    .map((x, i) => `<path d="M${x / 3} 0 Q${x} -10 ${x * 1.4} -${16 + (i % 3) * 4}" stroke="#8DA35A" stroke-width="1.4" fill="none"/>`)
+    .join('');
+  const plumes = [
+    [-6, -18, -40],
+    [2, -22, -10],
+    [8, -18, 25],
+  ]
+    .map(
+      ([x, y, a]) =>
+        `<g transform="translate(${x} ${y}) rotate(${a})"><path d="M0 0 Q2 -14 10 -30" stroke="#B9B39A" stroke-width="1.1" fill="none"/><path d="M0 0 Q2 -14 10 -30" stroke="#F4F1E4" stroke-width="5" fill="none" opacity=".85" stroke-linecap="round" stroke-dasharray="1 2.4"/></g>`,
+    )
+    .join('');
+  return `${shadow(16, 4, 1)}${blades}${plumes}`;
+}
+
+function wormwood() {
+  const stalk = (a: number, h: number) =>
+    `<g transform="rotate(${a})"><path d="M0 0 L0 ${-h}" stroke="#9AA58E" stroke-width="1.4"/>${[0.35, 0.55, 0.75]
+      .map((t) => `${leaf(0, -h * t, 7, -150, '#C3CCB8', false)}${leaf(0, -h * t, 7, -30, '#C3CCB8', false)}`)
+      .join('')}${[0.85, 0.92, 1]
+      .map((t, i) => `<circle cx="${i % 2 ? 1.6 : -1.6}" cy="${-h * t}" r="1.4" fill="#E2C24A"/>`)
+      .join('')}</g>`;
+  return `${shadow(18, 4.5, 1)}${stalk(-20, 30)}${stalk(-6, 36)}${stalk(8, 34)}${stalk(22, 28)}`;
+}
+
+/** Young (bud-stage) pictures for zone plants that should not look like a flower bud. */
+const YOUNG: Partial<Record<PlantId, () => string>> = {
+  cloudberry: () => cloudberry(false),
+};
+
 const BLOOMS: Record<PlantId, () => string> = {
   daisy,
   sunflower,
   bellflower,
-  tulip,
+  tulip: () => tulip(),
+  cloudberry: () => cloudberry(true),
+  dwarfbirch,
+  lichen,
+  lingonberry,
+  cedar,
+  blueberry,
+  feathergrass,
+  steppetulip: () => tulip('#F6D34B', '#C99A1E', '#FFF1A6'),
+  wormwood,
   lavender,
   moonflower,
   carrot,
@@ -259,6 +368,16 @@ export function plotBed(wet = false): string {
     ? `<ellipse class="wet" cx="0" cy="0" rx="45" ry="17" fill="#5A3826" opacity=".6"/><path d="M-22 -4 q4 -2 8 0 M14 6 q4 -2 8 0 M-6 9 q3 -1.5 6 0" stroke="#A9D9E6" stroke-width="1.3" fill="none" stroke-linecap="round" opacity=".8"/>`
     : '';
   return `${shadow(56, 20, 10)}<ellipse cx="0" cy="7" rx="52" ry="22" fill="${C.soilDark}"/><ellipse cx="0" cy="0" rx="52" ry="22" fill="${C.wood}" stroke="${C.woodDark}" stroke-width="1.6"/><ellipse cx="0" cy="0" rx="45" ry="17" fill="${C.soil}"/>${damp}<path d="M-30 -6 Q0 -10 30 -6 M-36 2 Q0 -2 36 2 M-28 9 Q0 6 28 9" stroke="${C.soilDeep}" stroke-width="1.4" fill="none" opacity=".55"/>`;
+}
+
+/** A bed in wild nature: a patch of earth ringed with moss and stones. */
+export function wildBed(wet = false, ground = '#8A6A45'): string {
+  const stones = [
+    [-44, 2], [-30, 14], [0, 18], [30, 14], [46, 0], [34, -12], [-36, -12],
+  ]
+    .map(([x, y], i) => `<ellipse cx="${x}" cy="${y}" rx="${5 + (i % 3)}" ry="3.6" fill="${i % 2 ? '#B6BCBA' : '#9EA5A4'}" stroke="#727978" stroke-width=".8"/>`)
+    .join('');
+  return `${shadow(56, 20, 10)}<ellipse cx="0" cy="2" rx="52" ry="21" fill="#6E8F4A"/><ellipse cx="0" cy="0" rx="45" ry="17" fill="${ground}"/>${wet ? `<ellipse class="wet" cx="0" cy="0" rx="45" ry="17" fill="#4A3220" opacity=".5"/>` : ''}<path d="M-26 -4 Q0 -8 26 -4 M-30 4 Q0 0 30 4" stroke="#5E4530" stroke-width="1.2" fill="none" opacity=".45"/>${stones}`;
 }
 
 /** Golden aura behind a golden bloom (the plant itself is tinted with the fGold filter). */
@@ -405,7 +524,61 @@ function frog() {
   return `${shadow(15, 4, 1)}<ellipse cx="-11" cy="-2" rx="6" ry="3.4" fill="#5E9E45" stroke="#3F7A3A" stroke-width=".9"/><ellipse cx="11" cy="-2" rx="6" ry="3.4" fill="#5E9E45" stroke="#3F7A3A" stroke-width=".9"/><ellipse cx="0" cy="-9" rx="13" ry="9.5" fill="#7DBA57" stroke="#3F7A3A" stroke-width="1.1"/><ellipse cx="0" cy="-5" rx="8" ry="4.4" fill="#C9E6A6"/><circle cx="-6.5" cy="-18" r="5" fill="#7DBA57" stroke="#3F7A3A" stroke-width="1.1"/><circle cx="6.5" cy="-18" r="5" fill="#7DBA57" stroke="#3F7A3A" stroke-width="1.1"/><circle cx="-6.5" cy="-18.4" r="3" fill="#fff"/><circle cx="6.5" cy="-18.4" r="3" fill="#fff"/><circle cx="-6" cy="-18" r="1.7" fill="${INK}"/><circle cx="7" cy="-18" r="1.7" fill="${INK}"/><path d="M-6 -10 Q0 -6 6 -10" stroke="#2E5A24" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="-9" cy="-11" r="1.8" fill="#F59AAA" opacity=".55"/><circle cx="9" cy="-11" r="1.8" fill="#F59AAA" opacity=".55"/>`;
 }
 
+// ---------------------------------------------------------------- natural zones: animals
+
+function legs(xs: number[], y: number, h: number, col: string, w = 3) {
+  return xs.map((x) => `<path d="M${x} ${y} L${x} ${y + h}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`).join('');
+}
+
+function reindeer() {
+  const antler = (dir: number) =>
+    `<path d="M${10 * dir} -36 Q${16 * dir} -46 ${12 * dir} -56 M${13 * dir} -45 Q${20 * dir} -48 ${22 * dir} -54 M${14 * dir} -51 Q${8 * dir} -55 ${6 * dir} -60" stroke="#8A6A4A" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+  return `${shadow(22, 4, 1)}${legs([-14, -8, 8, 13], -12, 12, '#5E4530')}<ellipse cx="0" cy="-17" rx="18" ry="9" fill="#9A7A5A" stroke="#5E4530" stroke-width="1"/><path d="M10 -22 Q14 -30 14 -36 L20 -36 Q22 -28 18 -18Z" fill="#9A7A5A" stroke="#5E4530" stroke-width="1"/><path d="M12 -26 Q17 -22 20 -24 Q18 -18 13 -18Z" fill="#F1EAD8"/><ellipse cx="19" cy="-36" rx="6" ry="4" fill="#9A7A5A" stroke="#5E4530" stroke-width="1"/><circle cx="24" cy="-35" r="1.4" fill="${INK}"/><circle cx="18" cy="-38" r="1.1" fill="${INK}"/>${antler(1)}<g transform="translate(6 0)">${antler(1)}</g><path d="M-18 -18 q-3 -2 -2 -6" stroke="#F1EAD8" stroke-width="3" stroke-linecap="round"/>`;
+}
+
+function arcticfox() {
+  return `${shadow(20, 4, 1)}<path d="M-14 -10 Q-30 -12 -30 -22 Q-24 -16 -14 -15Z" fill="#F7F7F2" stroke="#B9BDC2" stroke-width="1"/>${legs([-8, -3, 6, 10], -6, 6, '#D9DCE0', 2.6)}<ellipse cx="0" cy="-10" rx="13" ry="7" fill="#F7F7F2" stroke="#B9BDC2" stroke-width="1"/><path d="M9 -12 Q13 -22 20 -18 L26 -15 Q22 -10 14 -10Z" fill="#F7F7F2" stroke="#B9BDC2" stroke-width="1"/><path d="M12 -19 L13 -25 L16 -20 M16 -20 L18 -26 L19 -19" fill="#F7F7F2" stroke="#B9BDC2" stroke-width="1" stroke-linejoin="round"/><circle cx="26" cy="-15" r="1.3" fill="${INK}"/><circle cx="18" cy="-17" r="1.2" fill="${INK}"/>`;
+}
+
+function lemming() {
+  return `${shadow(11, 3, 1)}<ellipse cx="0" cy="-5" rx="10" ry="6" fill="#C9874A" stroke="#7E5230" stroke-width="1"/><path d="M-6 -10 Q0 -12 6 -10 Q2 -7 -6 -8Z" fill="#3B2E1E" opacity=".8"/><circle cx="8" cy="-6" r="4.4" fill="#C9874A" stroke="#7E5230" stroke-width="1"/><circle cx="10" cy="-7" r="1.1" fill="${INK}"/><circle cx="12.4" cy="-5.4" r=".9" fill="#E59A9A"/><circle cx="6" cy="-10" r="1.6" fill="#B07040"/>`;
+}
+
+function squirrel() {
+  return `${shadow(14, 3.4, 1)}<path d="M-6 -6 C-22 -6 -24 -30 -10 -34 C-2 -36 0 -28 -6 -24 C-12 -20 -10 -12 -4 -10Z" fill="#D9762E" stroke="#8E4A1A" stroke-width="1"/><ellipse cx="2" cy="-9" rx="7" ry="8" fill="#E08A3E" stroke="#8E4A1A" stroke-width="1"/><circle cx="6" cy="-19" r="5.4" fill="#E08A3E" stroke="#8E4A1A" stroke-width="1"/><path d="M3 -23 L3 -29 L6 -24 M7 -24 L9 -30 L10 -23" fill="#E08A3E" stroke="#8E4A1A" stroke-width="1" stroke-linejoin="round"/><circle cx="8.4" cy="-20" r="1.3" fill="${INK}"/><ellipse cx="5" cy="-6" rx="3" ry="4" fill="#F4D3A8"/><circle cx="8" cy="-11" r="2.2" fill="#8D5A2E"/>`;
+}
+
+function chipmunk() {
+  const stripes = `<path d="M-8 -9 Q0 -14 8 -10 M-8 -6 Q0 -11 8 -7" stroke="#4A3220" stroke-width="1.4" fill="none"/>`;
+  return `${shadow(13, 3.4, 1)}<path d="M-9 -5 Q-18 -6 -20 -14" stroke="#B07A4A" stroke-width="3.4" fill="none" stroke-linecap="round"/><ellipse cx="0" cy="-6" rx="10" ry="6" fill="#C99060" stroke="#7E5230" stroke-width="1"/>${stripes}<circle cx="9" cy="-9" r="5" fill="#C99060" stroke="#7E5230" stroke-width="1"/><circle cx="12" cy="-7" r="2.6" fill="#E8C8A0"/><circle cx="10.6" cy="-10.4" r="1.1" fill="${INK}"/><circle cx="7" cy="-14" r="1.6" fill="#B07A4A"/>`;
+}
+
+function bear() {
+  return `${shadow(28, 5, 1)}${legs([-16, -8, 10, 17], -10, 10, '#5E3B26', 6)}<ellipse cx="0" cy="-18" rx="22" ry="13" fill="#8A5A3B" stroke="#5E3B26" stroke-width="1.2"/><path d="M-6 -30 Q2 -36 12 -30" stroke="#A9744C" stroke-width="5" fill="none" stroke-linecap="round" opacity=".5"/><circle cx="22" cy="-22" r="9" fill="#8A5A3B" stroke="#5E3B26" stroke-width="1.2"/><circle cx="17" cy="-30" r="3.4" fill="#8A5A3B" stroke="#5E3B26" stroke-width="1"/><ellipse cx="29" cy="-20" rx="5" ry="3.6" fill="#C99A6B"/><circle cx="32.6" cy="-21" r="1.6" fill="${INK}"/><circle cx="24" cy="-25" r="1.4" fill="${INK}"/>`;
+}
+
+function saiga() {
+  return `${shadow(20, 4, 1)}${legs([-12, -7, 7, 11], -12, 12, '#9C7A4C', 2.6)}<ellipse cx="0" cy="-16" rx="16" ry="8" fill="#D9B98A" stroke="#9C7A4C" stroke-width="1"/><path d="M10 -20 Q14 -28 18 -30 L22 -26 Q18 -20 14 -16Z" fill="#D9B98A" stroke="#9C7A4C" stroke-width="1"/><path d="M18 -31 Q24 -32 27 -27 Q28 -22 23 -22 Q20 -24 18 -26Z" fill="#E3C79A" stroke="#9C7A4C" stroke-width="1"/><circle cx="20" cy="-29" r="1.2" fill="${INK}"/><path d="M17 -32 Q16 -40 18 -46 M19 -32 Q19 -40 21 -45" stroke="#E8DCC0" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
+}
+
+function gopher() {
+  return `${shadow(9, 3, 1)}<path d="M-6 0 Q-9 -14 -3 -22 Q4 -26 7 -18 Q9 -8 5 0Z" fill="#C9A06A" stroke="#8C6A3E" stroke-width="1"/><ellipse cx="1" cy="-8" rx="3.6" ry="6" fill="#EAD2A8"/><circle cx="2" cy="-22" r="5.4" fill="#C9A06A" stroke="#8C6A3E" stroke-width="1"/><circle cx="4.4" cy="-23" r="1.2" fill="${INK}"/><circle cx="6.6" cy="-20.6" r=".9" fill="#7A4A30"/><path d="M-1 -14 L3 -12 M-1 -12 L3 -10" stroke="#8C6A3E" stroke-width="1.6" stroke-linecap="round"/>`;
+}
+
+function eagle() {
+  return `${shadow(14, 3.4, 1)}<path d="M-4 -4 L-6 0 M2 -4 L3 0" stroke="#E2B94E" stroke-width="2" stroke-linecap="round"/><path d="M-10 -6 Q-12 -22 0 -26 Q10 -24 10 -10 Q6 -4 -10 -6Z" fill="#7A5230" stroke="#4A3220" stroke-width="1"/><path d="M-10 -8 Q-22 -4 -24 4 Q-14 0 -8 -4Z" fill="#6B4A2E" stroke="#4A3220" stroke-width="1"/><path d="M-6 -20 Q-14 -14 -12 -6" stroke="#5E3B26" stroke-width="1.2" fill="none"/><circle cx="4" cy="-28" r="6" fill="#8A6A4A" stroke="#4A3220" stroke-width="1"/><path d="M9 -29 Q14 -28 12 -24 L8 -26Z" fill="#E2B94E" stroke="#B08A2E" stroke-width=".8"/><circle cx="6" cy="-30" r="1.3" fill="${INK}"/>`;
+}
+
 const GUEST_ART: Record<GuestId, () => string> = {
+  reindeer,
+  arcticfox,
+  lemming,
+  squirrel,
+  chipmunk,
+  bear,
+  saiga,
+  gopher,
+  eagle,
   ladybug,
   snail,
   bee,
@@ -419,7 +592,7 @@ export function guestArt(id: GuestId): string {
 }
 
 export function guestIcon(id: GuestId, size = 64, locked = false): string {
-  return `<svg class="icon-svg${locked ? ' locked' : ''}" viewBox="-26 -32 52 40" width="${size}" height="${size}" aria-hidden="true">${guestArt(id)}</svg>`;
+  return `<svg class="icon-svg${locked ? ' locked' : ''}" viewBox="-32 -62 70 70" width="${size}" height="${size}" aria-hidden="true">${guestArt(id)}</svg>`;
 }
 
 export function medalIcon(got: boolean, size = 52): string {
@@ -451,6 +624,7 @@ export const ICONS = {
   garden: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M12 12C12 7 8.5 5 4.5 5c0 4.5 3 7 7.5 7Z" fill="currentColor"/><path d="M12 14c0-4 3-6.5 7.5-6.5 0 4-3 6.5-7.5 6.5Z" fill="currentColor" opacity=".7"/><path d="M5 21h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>`,
   decor: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V12a7 7 0 0 1 14 0v9" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/><circle cx="8" cy="8" r="2" fill="currentColor"/><circle cx="12" cy="5.6" r="2" fill="currentColor" opacity=".7"/><circle cx="16" cy="8" r="2" fill="currentColor"/></svg>`,
   book: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5Z" fill="currentColor" opacity=".75"/><path d="M13 4h5.5c.8 0 1.5.7 1.5 1.5v13c0 .8-.7 1.5-1.5 1.5H13Z" fill="currentColor"/></svg>`,
+  map: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 4v13.5M15 6.5V20" stroke="currentColor" stroke-width="2"/></svg>`,
   menu: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`,
   close: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`,
   check: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,

@@ -21,7 +21,7 @@ async function noGuests(page: Page) {
 async function start(page: Page) {
   await page.clock.install({ time: new Date('2026-11-01T10:00:00') });
   await page.goto('/');
-  await expect(page.locator('.quest-title')).toContainText('Задание 1 из 15');
+  await expect(page.locator('.quest-title')).toContainText('Задание 1 из 18');
   await noGuests(page);
 }
 
@@ -55,18 +55,18 @@ test('full first loop: plant, water, grow, harvest, collection', async ({ page }
   await page.clock.runFor(1000);
   await dismissQuestDone(page);
   await expect(page.locator('#petals')).toHaveText('8');
-  await expect(page.locator('.quest-title')).toContainText('Задание 4 из 15');
+  await expect(page.locator('.quest-title')).toContainText('Задание 4 из 18');
 
   await page.getByRole('button', { name: 'Коллекция' }).click();
   await expect(page.locator('.card.book').first()).toContainText('Ромашка');
-  await expect(page.locator('.card.book.locked')).toHaveCount(8); // 5 flowers + 3 vegetables
+  await expect(page.locator('.card.book.locked')).toHaveCount(17); // 18 plants, 1 found
   await shots(page, '04-collection');
   await page.getByRole('button', { name: 'Закрыть' }).click();
 
   // The game survives a reload.
   await page.reload();
   await expect(page.locator('#petals')).toHaveText('8');
-  await expect(page.locator('.quest-title')).toContainText('Задание 4 из 15');
+  await expect(page.locator('.quest-title')).toContainText('Задание 4 из 18');
 });
 
 test('growth is recalculated after time away; plants wait instead of dying', async ({ page }) => {
@@ -106,11 +106,11 @@ test('backup export and import', async ({ page }) => {
   // Start over, then restore the backup.
   await page.getByRole('button', { name: 'Начать сад заново' }).click();
   await page.getByRole('button', { name: 'Да, начать заново' }).click();
-  await expect(page.locator('.quest-title')).toContainText('Задание 1 из 15');
+  await expect(page.locator('.quest-title')).toContainText('Задание 1 из 18');
 
   await page.locator('#importFile').setInputFiles(path);
   await page.getByRole('button', { name: 'Загрузить', exact: true }).click();
-  await expect(page.locator('.quest-title')).toContainText('Задание 2 из 15');
+  await expect(page.locator('.quest-title')).toContainText('Задание 2 из 18');
 
   // A wrong file is rejected with a clear message.
   await page.locator('#importFile').setInputFiles({ name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('{"a":1}') });
@@ -167,7 +167,7 @@ test('works offline after the first load', async ({ page, context, browserName }
   });
   await context.setOffline(true);
   await page.reload();
-  await expect(page.locator('.quest-title')).toContainText('Задание 1 из 15');
+  await expect(page.locator('.quest-title')).toContainText('Задание 1 из 18');
   await expect(page.locator('[data-plot="0"]')).toBeVisible();
   await page.locator('[data-plot="0"]').click();
   await expect(page.getByRole('heading', { name: 'Что посадим?' })).toBeVisible();
@@ -262,7 +262,7 @@ test('guests can be met; requests on the board can be fulfilled', async ({ page 
   await page.getByRole('button', { name: 'Коллекция' }).click();
   await page.getByRole('button', { name: /Гости/ }).click();
   await expect(page.locator('.card.book').filter({ hasText: 'Лягушка' })).toBeVisible();
-  await expect(page.locator('.card.book.locked')).toHaveCount(5);
+  await expect(page.locator('.card.book.locked')).toHaveCount(14); // 15 guests, 1 met
   await shots(page, '10-guests');
 });
 
@@ -320,7 +320,7 @@ test('vegetable patch, Listik question, night and garden photo', async ({ page }
   await page.locator('[data-plant="carrot"]').click();
   await expect(page.locator('[data-plot="6"]')).toHaveClass(/st-thirsty/);
   await shots(page, '13-veg');
-  await page.locator('[data-go="garden"]').click();
+  await page.locator('#view-veg [data-go="garden"]').click();
   await expect(page.locator('#view-garden')).toBeVisible();
 
   // Badges tab.
@@ -337,4 +337,48 @@ test('vegetable patch, Listik question, night and garden photo', async ({ page }
   ]);
   expect(download.suggestedFilename()).toMatch(/^zelyony-sad-foto-.*\.png$/);
   await download.saveAs(test.info().outputPath('photo.png'));
+});
+
+test('map of natural zones: expedition to the tundra, zone plants and animals', async ({ page }) => {
+  const now = new Date('2026-11-01T12:00:00').getTime();
+  await page.clock.install({ time: now });
+  const empty = { plant: null, stage: 0, wateredAt: null, plantedAt: null, golden: false };
+  const save = {
+    version: 5, createdAt: now, updatedAt: now, petals: 70,
+    unlockedPlants: ['daisy', 'carrot'], openPlots: 6,
+    plots: Array.from({ length: 19 }, () => empty),
+    restored: { bridge: true, pond: true, veg: true, tundra: false, taiga: false, steppe: false },
+    decor: { owned: {}, placed: [] }, collection: {}, golden: {}, guests: {}, order: null, ordersDone: 3, questIndex: 15,
+    stats: { planted: {}, watered: 4, harvested: 5, sinceGolden: 0, sinceQuiz: 0 },
+    badges: [], quiz: { pending: false, solved: [], correct: 0, asked: 0 }, settings: { sound: false },
+  };
+  await page.addInitScript((s) => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    localStorage.setItem('green-garden/save', s);
+  }, JSON.stringify(save));
+  await page.goto('/');
+  await noGuests(page);
+  await expect(page.locator('.quest-title')).toContainText('Задание 16 из 18');
+  await page.getByRole('button', { name: 'Карта' }).click();
+  await expect(page.locator('[data-zone]')).toHaveCount(6);
+  await page.locator('[data-zone="tundra"]').click();
+  await expect(page.locator('.zone-card')).toContainText('вечная мерзлота');
+  await shots(page, '14-map');
+  await page.getByRole('button', { name: 'Снарядить экспедицию' }).click();
+  await page.getByRole('button', { name: 'Отправиться в тундру' }).click();
+  await expect(page.locator('#view-tundra')).toBeVisible();
+  await page.locator('[data-plot="10"]').click();
+  await expect(page.getByRole('heading', { name: 'Что посадим в тундре?' })).toBeVisible();
+  await expect(page.locator('[data-plant="cloudberry"]')).toBeVisible();
+  await expect(page.locator('[data-plant="daisy"]')).toHaveCount(0);
+  await page.locator('[data-plant="cloudberry"]').click();
+  await expect(page.locator('[data-plot="10"]')).toHaveClass(/st-thirsty/);
+  await page.evaluate(() => (window.__gardenApp as unknown as { spawnGuest(id: string, n: number): void }).spawnGuest('reindeer', Date.now()));
+  await page.locator('[data-guest="reindeer"]').click({ force: true });
+  await expect(page.getByRole('heading', { name: 'Ты встретил северного оленя!' })).toBeVisible();
+  await page.getByRole('button', { name: 'Привет!' }).click();
+  await shots(page, '15-tundra');
+  await page.locator('#view-tundra [data-go="garden"]').click();
+  await expect(page.locator('#view-garden')).toBeVisible();
 });

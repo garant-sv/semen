@@ -1,7 +1,7 @@
 // Saving, loading, migrations, export and import.
 // Storage failures are reported explicitly instead of being swallowed.
 
-import { DECO_IDS, GUEST_IDS, PLANT_IDS, PLOT_COUNT, QUESTS, SLOT_COUNT, TOTAL_PLOTS, type DecoId, type GuestId, type PlantId, type Stage } from './data';
+import { DECO_IDS, GUEST_IDS, LANDMARK_IDS, PLANT_IDS, PLOT_COUNT, QUESTS, SLOT_COUNT, TOTAL_PLOTS, type DecoId, type GuestId, type PlantId, type Stage } from './data';
 import { BADGE_IDS } from './badges';
 import { QUESTIONS } from './quiz';
 import { SAVE_VERSION, emptyPlot, newGame, type GameState, type Order, type Plot } from './state';
@@ -60,7 +60,8 @@ type Raw = Record<string, unknown>;
  *      plots without plantedAt.
  * v2 — settings.sound, stats.planted / stats.watered, plot.plantedAt.
  * v3 — garden guests, golden flowers (plot.golden, golden, stats.sinceGolden), orders.
- * v4 — current: vegetable patch (4 more plots, restored.veg), badges, Listik's questions (quiz, stats.sinceQuiz).
+ * v4 — vegetable patch (4 more plots, restored.veg), badges, Listik's questions (quiz, stats.sinceQuiz).
+ * v5 — current: natural zones (tundra, taiga, steppe): 9 more plots, restored.<zone>.
  */
 export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
   1: (raw) => {
@@ -108,6 +109,10 @@ export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
       quiz: { pending: false, solved: [], correct: 0, asked: 0 },
       stats: { ...stats, sinceQuiz: 0 },
     };
+  },
+  4: (raw) => {
+    const restored = (raw.restored as Raw | undefined) ?? {};
+    return { ...raw, version: 5, restored: { ...restored, tundra: false, taiga: false, steppe: false } };
   },
 };
 
@@ -176,7 +181,7 @@ export function sanitize(raw: Raw, now: number): GameState {
   });
 
   const restored = isObj(raw.restored) ? raw.restored : {};
-  s.restored = { bridge: restored.bridge === true, pond: restored.pond === true, veg: restored.veg === true };
+  for (const id of LANDMARK_IDS) s.restored[id] = restored[id] === true;
 
   const decor = raw.decor as Raw;
   const owned = isObj(decor.owned) ? decor.owned : {};

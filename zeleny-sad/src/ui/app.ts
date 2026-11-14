@@ -3,7 +3,12 @@
 import {
   DECORATIONS,
   DECO_IDS,
+  AREA_PLANTS,
   FLOWER_IDS,
+  ZONE_ATLAS,
+  ZONE_IDS,
+  areaPlots,
+  plotArea,
   GUESTS,
   GUEST_IDS,
   LANDMARKS,
@@ -15,7 +20,11 @@ import {
   SLOT_COUNT,
   TOTAL_PLOTS,
   VEG_IDS,
-  isVegPlot,
+  TUNDRA_IDS,
+  TAIGA_IDS,
+  STEPPE_IDS,
+  type AreaId,
+  type ZoneId,
   STAGE_NAMES,
   type DecoId,
   type Goal,
@@ -81,6 +90,8 @@ import {
   skySVG,
   vegBackgroundSVG,
   vegSignSVG,
+  zoneBackgroundSVG,
+  zoneBackSignSVG,
   type DayPhase,
   bridgeSVG,
   brookSVG,
@@ -129,14 +140,23 @@ const GUEST_SPOTS: Record<'meadow' | 'pond', [number, number][]> = {
 };
 
 /** Seconds a guest stays before leaving. */
-const GUEST_STAY: Record<GuestId, number> = {
+const GUEST_STAY: Partial<Record<GuestId, number>> = {
   ladybug: 14,
   snail: 20,
   bee: 12,
   butterfly: 12,
-  hedgehog: 15,
-  frog: 15,
 };
+
+/** Places in a natural zone where its animals may appear. */
+const ZONE_SPOTS: [number, number][] = [
+  [200, 400],
+  [330, 560],
+  [70, 580],
+  [300, 360],
+  [110, 380],
+];
+
+const AREA_NAME: Record<AreaId, string> = { garden: 'Сад', veg: 'Огород', tundra: 'Тундра', taiga: 'Тайга', steppe: 'Степь' };
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
@@ -176,7 +196,7 @@ export class App {
   private nextGuestAt = 0;
   private collectionTab: 'plants' | 'guests' | 'badges' = 'plants';
   /** Which part of the world is shown: the flower garden or the vegetable patch. */
-  private view: 'garden' | 'veg' = 'garden';
+  private view: AreaId = 'garden';
   private phase: DayPhase = 'day';
   private question: Question | null = null;
   /** Short screens (iPhone SE): the quest card folds itself after the first tap in the garden. */
@@ -209,8 +229,10 @@ export class App {
 <section class="quest" id="quest" aria-live="polite"></section>
 <main class="stage" id="stage">
   <svg id="scene" viewBox="0 0 400 640" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Сад">
-    <g id="view-garden"><g id="l-bg">${backgroundSVG()}</g><g id="l-brook"></g><g id="l-pond"></g><g id="l-bridge"></g><g id="l-board"></g><g id="l-sign"></g><g id="l-wild"></g><g id="l-haze"></g><g id="l-objects"></g><g id="l-life"></g><g id="l-guest"></g></g>
+    <g id="view-garden"><g id="l-bg">${backgroundSVG()}</g><g id="l-brook"></g><g id="l-pond"></g><g id="l-bridge"></g><g id="l-board"></g><g id="l-sign"></g><g id="l-wild"></g><g id="l-haze"></g><g id="l-objects"></g><g id="l-life"></g></g>
     <g id="view-veg" style="display:none"><g id="v-bg">${vegBackgroundSVG()}</g><g id="v-sign">${backSignSVG()}</g><g id="v-objects"></g></g>
+    ${ZONE_IDS.map((z) => `<g id="view-${z}" style="display:none"><g>${zoneBackgroundSVG(z)}</g><g>${zoneBackSignSVG()}</g><g id="${z}-objects"></g></g>`).join('')}
+    <g id="l-guest"></g>
     <g id="l-sky"></g><g id="l-lights"></g><g id="l-fx"></g>
   </svg>
   <div class="mode-chip" id="modeChip" hidden></div>
@@ -218,6 +240,7 @@ export class App {
 <nav class="nav" aria-label="Меню игры">
   <button type="button" data-nav="garden" class="active">${ICONS.garden}<span>Сад</span></button>
   <button type="button" data-nav="decor">${ICONS.decor}<span>Украсить</span></button>
+  <button type="button" data-nav="map">${ICONS.map}<span>Карта</span></button>
   <button type="button" data-nav="collection">${ICONS.book}<span>Коллекция</span></button>
   <button type="button" data-nav="menu">${ICONS.menu}<span>Меню</span></button>
 </nav>
@@ -230,6 +253,7 @@ export class App {
       ...PLOTS.map((p, i) => ({ key: `plot-${i}`, y: p.y, layer: '#l-objects' })),
       ...SLOTS.map((p, i) => ({ key: `slot-${i}`, y: p.y, layer: '#l-objects' })),
       ...VEG_PLOTS.map((p, i) => ({ key: `plot-${PLOT_COUNT + i}`, y: p.y, layer: '#v-objects' })),
+      ...ZONE_IDS.flatMap((z) => areaPlots(z).map((i) => ({ key: `plot-${i}`, y: plotPos(i).y, layer: `#${z}-objects` }))),
     ].sort((a, b) => a.y - b.y);
     const svgG = () => document.createElementNS('http://www.w3.org/2000/svg', 'g');
     for (const it of items) {
@@ -406,9 +430,9 @@ export class App {
     this.setLayer('brook', $(this.root, '#l-brook'), brookSVG(s.restored.pond));
     this.setLayer('board', $(this.root, '#l-board'), boardSVG(s));
     this.setLayer('sign', $(this.root, '#l-sign'), vegSignSVG(s.restored.veg, landmarkAvailable(s, 'veg')));
-    if (this.view === 'veg' && !s.restored.veg) this.view = 'garden';
-    $(this.root, '#view-garden').style.display = this.view === 'garden' ? '' : 'none';
-    $(this.root, '#view-veg').style.display = this.view === 'veg' ? '' : 'none';
+    if (this.view !== 'garden' && !s.restored[this.view]) this.view = 'garden';
+    for (const a of ['garden', 'veg', ...ZONE_IDS] as AreaId[]) $(this.root, `#view-${a}`).style.display = this.view === a ? '' : 'none';
+    $(this.root, '#stage').dataset.area = this.view;
     this.phase = dayPhase(new Date(now).getHours());
     this.setLayer('sky', $(this.root, '#l-sky'), skySVG(this.phase));
     this.setLayer('lights', $(this.root, '#l-lights'), this.phase === 'day' ? '' : lightsSVG(this.lightSpots()));
@@ -449,7 +473,14 @@ export class App {
         return `Собрать: ${PLANTS[g.plant].name}`;
       case 'restore': {
         const def = LANDMARKS[g.target];
-        const verb = { bridge: 'Починить мостик', pond: 'Наполнить пруд', veg: 'Расчистить огород' }[g.target];
+        const verb = {
+          bridge: 'Починить мостик',
+          pond: 'Наполнить пруд',
+          veg: 'Расчистить огород',
+          tundra: 'Экспедиция в тундру',
+          taiga: 'Экспедиция в тайгу',
+          steppe: 'Экспедиция в степь',
+        }[g.target];
         return s.restored[g.target] ? verb : `${verb} (${Math.min(s.petals, def.price)}/${def.price} лепестков)`;
       }
       case 'place':
@@ -462,6 +493,8 @@ export class App {
         return 'Собрать золотой цветок';
       case 'orders':
         return `Выполнить просьбы: ${Math.min(g.count, s.ordersDone)} из ${g.count}`;
+      case 'meet':
+        return `Познакомиться: ${GUESTS[g.guest].name}`;
     }
   }
 
@@ -560,6 +593,7 @@ export class App {
       this.goTo('garden');
       this.setMode(this.mode === 'decor' ? 'garden' : 'decor');
     } else if (nav === 'collection') this.showCollection();
+    else if (nav === 'map') this.showMap();
     else if (nav === 'menu') this.showMenu();
   }
 
@@ -580,7 +614,7 @@ export class App {
     }
     if (t.closest('[data-guest]')) return this.onGuest();
     const go = t.closest<SVGGElement>('[data-go]');
-    if (go && this.mode === 'garden') return this.onSign(go.dataset.go as 'garden' | 'veg');
+    if (go && this.mode === 'garden') return this.onSign(go.dataset.go as AreaId);
     if (slot && this.mode === 'decor') return this.onSlot(Number(slot.dataset.slot));
     if (t.closest('[data-board]') && this.mode === 'garden') return this.showOrderSheet();
     if (plot) return this.onPlot(Number(plot.dataset.plot));
@@ -667,6 +701,9 @@ export class App {
           bridge: 'Старый мостик совсем развалился. Листик скоро расскажет, как его починить.',
           pond: 'Пруд давно высох. Сначала нужно разбудить остальной сад.',
           veg: 'Огород совсем зарос. Сначала наполни пруд — тогда хватит воды и для грядок.',
+          tundra: 'В экспедицию можно будет отправиться, когда Листик позовёт.',
+          taiga: 'Сначала побывай в тундре.',
+          steppe: 'Сначала побывай в тайге.',
         }[id],
       );
       return;
@@ -675,13 +712,13 @@ export class App {
   }
 
   /** Signposts switch between the garden and the vegetable patch. */
-  private onSign(to: 'garden' | 'veg') {
-    if (to === 'veg' && !this.state.restored.veg) return this.onLandmark('veg');
+  private onSign(to: AreaId) {
+    if (to !== 'garden' && !this.state.restored[to]) return this.onLandmark(to);
     play('tap');
     this.goTo(to);
   }
 
-  private goTo(view: 'garden' | 'veg') {
+  private goTo(view: AreaId) {
     if (this.view === view) return;
     this.view = view;
     if (this.guest) this.dismissGuest(false);
@@ -696,8 +733,7 @@ export class App {
   private lightSpots() {
     const s = this.state;
     const spots: { x: number; y: number; r: number; color?: string }[] = [];
-    const beds = this.view === 'garden' ? [...Array(PLOT_COUNT).keys()] : [...Array(TOTAL_PLOTS - PLOT_COUNT).keys()].map((i) => i + PLOT_COUNT);
-    for (const i of beds) {
+    for (const i of areaPlots(this.view)) {
       const p = s.plots[i];
       if (!p.plant || p.stage < 3) continue;
       const { x, y } = plotPos(i);
@@ -709,7 +745,7 @@ export class App {
         if (d === 'lantern') spots.push({ x: SLOTS[i].x, y: SLOTS[i].y - 54, r: 52 });
       });
       if (s.restored.pond) for (const [x, y] of [[60, 290], [150, 300], [40, 345], [175, 345]]) spots.push({ x, y, r: 6 });
-    } else {
+    } else if (this.view === 'veg') {
       spots.push({ x: 287, y: 262, r: 34 });
     }
     return spots;
@@ -739,7 +775,8 @@ export class App {
 
   private showSeedSheet(plot: number) {
     const s = this.state;
-    const kinds = isVegPlot(plot) ? VEG_IDS : FLOWER_IDS;
+    const area = plotArea(plot);
+    const kinds = AREA_PLANTS[area];
     const cards = kinds.map((id) => {
       const def = PLANTS[id];
       const open = s.unlockedPlants.includes(id);
@@ -748,7 +785,8 @@ export class App {
       }
       return `<button type="button" class="card" data-plant="${id}">${plantIcon(id, 3, 64)}<b>${def.name}</b><small>${def.growMinutes} мин · +${def.petals}</small></button>`;
     }).join('');
-    const sheet = this.openSheet(`<h2>${isVegPlot(plot) ? 'Что посадим в огороде?' : 'Что посадим?'}</h2><p class="muted">Растение подрастает после каждого полива. Оно не завянет, даже если ты уйдёшь.</p><div class="grid">${cards}</div>`);
+    const title = { garden: 'Что посадим?', veg: 'Что посадим в огороде?', tundra: 'Что посадим в тундре?', taiga: 'Что посадим в тайге?', steppe: 'Что посадим в степи?' }[area];
+    const sheet = this.openSheet(`<h2>${title}</h2><p class="muted">Растение подрастает после каждого полива. Оно не завянет, даже если ты уйдёшь.</p><div class="grid">${cards}</div>`);
     sheet.querySelectorAll<HTMLButtonElement>('[data-plant]').forEach((b) =>
       b.addEventListener('click', () => {
         const r = plantSeed(this.state, plot, b.dataset.plant as PlantId, this.now(), Math.random);
@@ -768,11 +806,21 @@ export class App {
     const s = this.state;
     const def = LANDMARKS[id];
     const enough = s.petals >= def.price;
-    const what = { bridge: 'Починить мостик', pond: 'Наполнить пруд', veg: 'Расчистить огород' }[id];
+    const what = {
+      bridge: 'Починить мостик',
+      pond: 'Наполнить пруд',
+      veg: 'Расчистить огород',
+      tundra: 'Отправиться в тундру',
+      taiga: 'Отправиться в тайгу',
+      steppe: 'Отправиться в степь',
+    }[id];
     const desc = {
       bridge: 'Старые доски сгнили, а перила упали в ручей. Листик знает, как всё исправить, — нужны только лепестки.',
       pond: 'Ручей завалило камнями и ветками, и пруд высох. Если расчистить ручей, вода вернётся.',
       veg: 'За садом есть старый огород: четыре грядки, сарайчик и бочка для воды. Всё заросло сорняками, но если расчистить, там вырастут морковка, клубника и тыква!',
+      tundra: `${ZONE_ATLAS[1].text} Лепестки пойдут на тёплую одежду и снаряжение для экспедиции.`,
+      taiga: `${ZONE_ATLAS[2].text} Для экспедиции нужны лепестки.`,
+      steppe: `${ZONE_ATLAS[4].text} Для экспедиции нужны лепестки.`,
     }[id];
     const sheet = this.openSheet(`<div class="sheet-hero">${listik(64, 'wow')}</div><h2>${def.brokenName}</h2><p>${desc}</p>
 <div class="price">${petalIcon(24)}<b>${def.price}</b><span class="muted">у тебя ${s.petals}</span></div>
@@ -784,10 +832,10 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       if (r.ok) {
         play('build');
         this.commit();
-        if (id === 'veg') {
+        if (id === 'veg' || (ZONE_IDS as readonly string[]).includes(id)) {
           this.toast(def.restoredText);
           this.confetti();
-          window.setTimeout(() => this.goTo('veg'), 400);
+          window.setTimeout(() => this.goTo(id as AreaId), 400);
           return;
         }
         for (const layer of id === 'pond' ? ['pond', 'brook'] : ['bridge']) {
@@ -873,15 +921,28 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       }).join('');
       body = `<p class="muted">Получено ${earned(s).length} из ${BADGES.length}.</p><div class="badge-grid">${cards}</div>`;
     } else if (this.collectionTab === 'plants') {
-      body = `<p class="muted">Открыто ${plantsFound} из ${PLANT_IDS.length}. Золотые: ${goldKinds} из ${PLANT_IDS.length} видов.</p><h3 class="sub">Цветы</h3><div class="grid book-grid">${FLOWER_IDS.map(plantCard).join('')}</div><h3 class="sub">Огород</h3><div class="grid book-grid">${VEG_IDS.map(plantCard).join('')}</div>`;
+      body = `<p class="muted">Открыто ${plantsFound} из ${PLANT_IDS.length}. Золотые: ${goldKinds} из ${PLANT_IDS.length} видов.</p>${(
+        [
+          ['Цветы', FLOWER_IDS],
+          ['Огород', VEG_IDS],
+          ['Тундра', TUNDRA_IDS],
+          ['Тайга', TAIGA_IDS],
+          ['Степь', STEPPE_IDS],
+        ] as [string, readonly PlantId[]][]
+      )
+        .map(([name, ids]) => `<h3 class="sub">${name}</h3><div class="grid book-grid">${ids.map(plantCard).join('')}</div>`)
+        .join('')}`;
     } else {
-      const cards = GUEST_IDS.map((id) => {
+      const guestCard = (id: GuestId) => {
         const e = s.guests[id];
         const def = GUESTS[id];
         if (!e) return `<div class="card book locked">${guestIcon(id, 72, true)}<b>???</b><small>Ещё не встречали</small><p class="muted">${def.hint}</p></div>`;
         return `<div class="card book">${guestIcon(id, 72)}<b>${def.name}</b><small>Встреч: ${e.count}</small><p>${def.fact}</p></div>`;
-      }).join('');
-      body = `<p class="muted">Встречено ${guestsFound} из ${GUEST_IDS.length}. Гости приходят ненадолго — нажми на гостя, чтобы познакомиться.</p><div class="grid book-grid">${cards}</div>`;
+      };
+      const groups = (['garden', ...ZONE_IDS] as const).map(
+        (a) => `<h3 class="sub">${a === 'garden' ? 'Наш сад' : AREA_NAME[a]}</h3><div class="grid book-grid">${GUEST_IDS.filter((id) => GUESTS[id].area === a).map(guestCard).join('')}</div>`,
+      );
+      body = `<p class="muted">Встречено ${guestsFound} из ${GUEST_IDS.length}. Гости приходят ненадолго — нажми на гостя, чтобы познакомиться.</p>${groups.join('')}`;
     }
     const tab = (id: 'plants' | 'guests' | 'badges', label: string, n: number, total: number) =>
       `<button type="button" class="tab${this.collectionTab === id ? ' active' : ''}" data-tab="${id}">${label} <span>${n}/${total}</span></button>`;
@@ -1022,6 +1083,53 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     }
   }
 
+  // ------------------------------------------------------------ map of natural zones
+
+  private showMap() {
+    const s = this.state;
+    const bandH = 54;
+    const bands = ZONE_ATLAS.map((z, i) => {
+      const y = i * bandH;
+      const zone = (ZONE_IDS as readonly string[]).includes(z.id) ? (z.id as ZoneId) : null;
+      const home = z.id === 'mixed';
+      const open = zone ? s.restored[zone] : home;
+      const status = home ? '★ наш сад' : zone ? (open ? 'открыто' : landmarkAvailable(s, zone) ? 'можно отправиться!' : 'закрыто') : 'скоро';
+      const dark = z.id === 'taiga';
+      return `<g class="band${open ? ' open' : ''}" data-zone="${z.id}" role="button" aria-label="${z.name}: ${status}"><rect x="0" y="${y}" width="320" height="${bandH}" fill="${z.color}"/><text x="14" y="${y + 24}" font-size="16" font-weight="800" fill="${dark ? '#FFF6E3' : '#3B2E1E'}">${z.name}</text><text x="14" y="${y + 42}" font-size="12" fill="${dark ? '#E3EFD6' : '#6B5A43'}">${status}</text>${zone && !open && landmarkAvailable(s, zone) ? `<circle class="pulse" cx="296" cy="${y + 27}" r="9" fill="#F6BE3B"/>` : ''}</g>`;
+    }).join('');
+    const sheet = this.openSheet(`<h2>Карта природных зон</h2><p class="muted">Россия с севера на юг. Чем южнее, тем теплее. Нажми на зону, чтобы узнать о ней.</p>
+<div class="map-wrap"><svg class="map" viewBox="0 0 320 ${bandH * ZONE_ATLAS.length}" role="group" aria-label="Природные зоны">${bands}<g pointer-events="none"><text x="306" y="16" font-size="11" text-anchor="end" fill="#6B5A43">Север ↑</text><text x="306" y="${bandH * ZONE_ATLAS.length - 6}" font-size="11" text-anchor="end" fill="#6B5A43">Юг ↓</text></g></svg></div>
+<div id="zoneCard"></div>`);
+    const show = (id: string) => {
+      const z = ZONE_ATLAS.find((x) => x.id === id)!;
+      const zone = (ZONE_IDS as readonly string[]).includes(id) ? (id as ZoneId) : null;
+      let action = '';
+      if (id === 'mixed') action = `<button type="button" class="btn primary wide" data-goto="garden">В наш сад</button>`;
+      else if (zone && s.restored[zone]) action = `<button type="button" class="btn primary wide" data-goto="${zone}">Отправиться: ${z.name}</button>`;
+      else if (zone && landmarkAvailable(s, zone)) action = `<button type="button" class="btn primary wide" data-expedition="${zone}">Снарядить экспедицию</button>`;
+      else if (zone) action = `<p class="muted center">Экспедиция откроется позже — Листик расскажет, когда.</p>`;
+      else action = `<p class="muted center">Сюда экспедиция пока не ходит — скоро!</p>`;
+      const card = $(sheet, '#zoneCard');
+      card.innerHTML = `<div class="zone-card" style="border-color:${z.color}"><h3>${z.name}</h3><p>${z.text}</p><p><b>Растения:</b> ${z.plants}<br><b>Животные:</b> ${z.animals}</p>${action}</div>`;
+      card.querySelector<HTMLButtonElement>('[data-goto]')?.addEventListener('click', (e) => {
+        this.closeSheet();
+        this.goTo((e.currentTarget as HTMLElement).dataset.goto as AreaId);
+      });
+      card.querySelector<HTMLButtonElement>('[data-expedition]')?.addEventListener('click', () => {
+        this.closeSheet();
+        this.showRestoreSheet(zone!);
+      });
+      card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+    sheet.querySelectorAll<SVGGElement>('[data-zone]').forEach((g) =>
+      g.addEventListener('click', () => {
+        play('tap');
+        show(g.dataset.zone!);
+      }),
+    );
+    show(this.view === 'garden' || this.view === 'veg' ? 'mixed' : this.view);
+  }
+
   private showGuestDiscovery(id: GuestId, petals: number) {
     const def = GUESTS[id];
     play('quest');
@@ -1036,8 +1144,8 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     if (this.guest && now >= this.guest.leaveAt) this.dismissGuest(false);
     if (this.guest || now < this.nextGuestAt) return;
     const sheetOpen = !$(this.root, '#sheetBackdrop').hidden;
-    if (sheetOpen || this.mode !== 'garden' || this.view !== 'garden' || document.visibilityState === 'hidden') return;
-    const options = visitingGuests(this.state);
+    if (sheetOpen || this.mode !== 'garden' || this.view === 'veg' || document.visibilityState === 'hidden') return;
+    const options = visitingGuests(this.state, this.view);
     if (!options.length) {
       this.nextGuestAt = now + 10_000;
       return;
@@ -1056,6 +1164,8 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       const bed = PLOTS[beds[Math.floor(Math.random() * beds.length)] ?? 1];
       x = bed.x + (Math.random() < 0.5 ? -30 : 30);
       y = bed.y - 70;
+    } else if (def.area !== 'garden') {
+      [x, y] = ZONE_SPOTS[Math.floor(Math.random() * ZONE_SPOTS.length)];
     } else {
       const spots = GUEST_SPOTS[def.home];
       [x, y] = spots[Math.floor(Math.random() * spots.length)];
@@ -1070,7 +1180,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     g.innerHTML = `<ellipse class="guest-glow" cx="0" cy="-8" rx="30" ry="22" fill="url(#gGuest)"/><g class="guest-move"><g transform="scale(${1.5 * flip} 1.5)">${guestArt(id)}</g></g><circle cx="0" cy="-10" r="34" fill="transparent"/>`;
     $(this.root, '#l-guest').appendChild(g);
     window.setTimeout(() => g.classList.remove('enter'), 700);
-    this.guest = { id, x, y, el: g, leaveAt: now + GUEST_STAY[id] * 1000 };
+    this.guest = { id, x, y, el: g, leaveAt: now + (GUEST_STAY[id] ?? 15) * 1000 };
   }
 
   private dismissGuest(met: boolean) {

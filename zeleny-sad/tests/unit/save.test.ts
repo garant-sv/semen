@@ -139,8 +139,8 @@ describe('migrations', () => {
     expect(state.settings.sound).toBe(false);
     expect(state).toMatchObject({ golden: {}, guests: {}, order: null, ordersDone: 0, petals: 12, questIndex: 3 });
     // v4: four vegetable beds, the patch is still overgrown.
-    expect(state.plots).toHaveLength(10);
-    expect(state.restored).toEqual({ bridge: false, pond: false, veg: false });
+    expect(state.plots).toHaveLength(19);
+    expect(state.restored).toEqual({ bridge: false, pond: false, veg: false, tundra: false, taiga: false, steppe: false });
     expect(state.quiz).toEqual({ pending: false, solved: [], correct: 0, asked: 0 });
   });
 

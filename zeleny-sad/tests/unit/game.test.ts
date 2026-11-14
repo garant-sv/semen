@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FLOWER_IDS, GOLDEN_FROM_QUEST, GOLDEN_PITY, PLANT_IDS, PLANTS, QUESTS } from '../../src/game/data';
+import { FLOWER_IDS, GOLDEN_FROM_QUEST, GOLDEN_PITY, LANDMARKS, PLANT_IDS, PLANTS, QUESTS } from '../../src/game/data';
 import { QUESTIONS, QUIZ_EVERY } from '../../src/game/quiz';
 import { earned, newBadges } from '../../src/game/badges';
 import {
@@ -204,6 +204,27 @@ describe('quest chain', () => {
     expect(s.unlockedPlants).toContain('pumpkin');
     growOn(7, 'strawberry');
     growOn(8, 'pumpkin');
+    expect(s.questIndex).toBe(15);
+    // Quests 16–18: natural zones.
+    expect(plantSeed(s, 10, 'cloudberry', t).ok).toBe(false); // tundra not reached yet
+    const expedition = (zone: 'tundra' | 'taiga' | 'steppe') => {
+      while (s.petals < LANDMARKS[zone].price) growOn(0, 'tulip');
+      expect(restore(s, zone, t).ok).toBe(true);
+    };
+    expedition('tundra');
+    expect(plantSeed(s, 10, 'lingonberry', t).ok).toBe(false); // taiga plant does not grow in the tundra
+    growOn(10, 'cloudberry');
+    expect(s.questIndex).toBe(16);
+    expedition('taiga');
+    growOn(13, 'lingonberry');
+    growOn(14, 'cedar');
+    expect(s.questIndex).toBe(17);
+    expedition('steppe');
+    growOn(16, 'steppetulip');
+    expect(visitingGuests(s, 'steppe')).toContain('saiga');
+    expect(visitingGuests(s, 'garden')).not.toContain('saiga');
+    meetGuest(s, 'saiga', t);
+    step();
     expect(s.questIndex).toBe(QUESTS.length);
   });
 });

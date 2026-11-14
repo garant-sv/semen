@@ -1,6 +1,6 @@
 // Badges: computed from the game state, announced once (ids kept in state.badges).
 
-import { DECO_IDS, FLOWER_IDS, GUEST_IDS, PLANT_IDS, VEG_IDS } from './data';
+import { DECO_IDS, FLOWER_IDS, GUEST_IDS, PLANT_IDS, VEG_IDS, ZONE_IDS } from './data';
 import type { GameState } from './state';
 
 export interface Badge {
@@ -46,7 +46,13 @@ export const BADGES: Badge[] = [
     id: 'builder',
     name: 'Мастер на все руки',
     desc: 'Почини мостик, наполни пруд и расчисти огород',
-    progress: (s) => count(Object.values(s.restored).filter(Boolean).length, 3),
+    progress: (s) => count([s.restored.bridge, s.restored.pond, s.restored.veg].filter(Boolean).length, 3),
+  },
+  {
+    id: 'traveller',
+    name: 'Путешественник',
+    desc: 'Побывай в тундре, тайге и степи',
+    progress: (s) => count(ZONE_IDS.filter((z) => s.restored[z]).length, ZONE_IDS.length),
   },
   {
     id: 'decor',

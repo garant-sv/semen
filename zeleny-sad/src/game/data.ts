@@ -3,26 +3,72 @@
 
 export const FLOWER_IDS = ['daisy', 'sunflower', 'bellflower', 'tulip', 'lavender', 'moonflower'] as const;
 export const VEG_IDS = ['carrot', 'strawberry', 'pumpkin'] as const;
-export const PLANT_IDS = [...FLOWER_IDS, ...VEG_IDS] as const;
+export const TUNDRA_IDS = ['cloudberry', 'dwarfbirch', 'lichen'] as const;
+export const TAIGA_IDS = ['lingonberry', 'cedar', 'blueberry'] as const;
+export const STEPPE_IDS = ['feathergrass', 'steppetulip', 'wormwood'] as const;
+export const PLANT_IDS = [...FLOWER_IDS, ...VEG_IDS, ...TUNDRA_IDS, ...TAIGA_IDS, ...STEPPE_IDS] as const;
 export type PlantId = (typeof PLANT_IDS)[number];
 export type VegId = (typeof VEG_IDS)[number];
 export const isVeg = (p: PlantId): p is VegId => (VEG_IDS as readonly string[]).includes(p);
 
+/** Parts of the world: the home garden (mixed forest zone), the vegetable patch and three natural zones. */
+export const ZONE_IDS = ['tundra', 'taiga', 'steppe'] as const;
+export type ZoneId = (typeof ZONE_IDS)[number];
+export type AreaId = 'garden' | 'veg' | ZoneId;
+export const AREA_PLANTS: Record<AreaId, readonly PlantId[]> = {
+  garden: FLOWER_IDS,
+  veg: VEG_IDS,
+  tundra: TUNDRA_IDS,
+  taiga: TAIGA_IDS,
+  steppe: STEPPE_IDS,
+};
+export const plantArea = (p: PlantId): AreaId =>
+  (Object.keys(AREA_PLANTS) as AreaId[]).find((a) => AREA_PLANTS[a].includes(p)) ?? 'garden';
+
 export const DECO_IDS = ['lantern', 'birdhouse', 'pinwheel', 'bench', 'scarecrow', 'arch'] as const;
 export type DecoId = (typeof DECO_IDS)[number];
 
-export const LANDMARK_IDS = ['bridge', 'pond', 'veg'] as const;
+export const LANDMARK_IDS = ['bridge', 'pond', 'veg', 'tundra', 'taiga', 'steppe'] as const;
 export type Landmark = (typeof LANDMARK_IDS)[number];
 
-export const GUEST_IDS = ['ladybug', 'snail', 'bee', 'butterfly', 'hedgehog', 'frog'] as const;
+export const GUEST_IDS = [
+  'ladybug',
+  'snail',
+  'bee',
+  'butterfly',
+  'hedgehog',
+  'frog',
+  'reindeer',
+  'arcticfox',
+  'lemming',
+  'squirrel',
+  'chipmunk',
+  'bear',
+  'saiga',
+  'gopher',
+  'eagle',
+] as const;
 export type GuestId = (typeof GUEST_IDS)[number];
 
 /** Flower beds in the garden. */
 export const PLOT_COUNT = 6;
 /** Vegetable beds in the vegetable patch; they follow the flower beds in `plots`. */
 export const VEG_PLOT_COUNT = 4;
-export const TOTAL_PLOTS = PLOT_COUNT + VEG_PLOT_COUNT;
-export const isVegPlot = (i: number) => i >= PLOT_COUNT;
+/** Beds in each natural zone. */
+export const ZONE_PLOT_COUNT = 3;
+/** Plot index ranges per area: [first, count]. */
+export const AREA_PLOTS: Record<AreaId, [number, number]> = {
+  garden: [0, PLOT_COUNT],
+  veg: [PLOT_COUNT, VEG_PLOT_COUNT],
+  tundra: [10, ZONE_PLOT_COUNT],
+  taiga: [13, ZONE_PLOT_COUNT],
+  steppe: [16, ZONE_PLOT_COUNT],
+};
+export const TOTAL_PLOTS = 19;
+export const plotArea = (i: number): AreaId =>
+  (Object.keys(AREA_PLOTS) as AreaId[]).find((a) => i >= AREA_PLOTS[a][0] && i < AREA_PLOTS[a][0] + AREA_PLOTS[a][1]) ?? 'garden';
+export const areaPlots = (a: AreaId) => Array.from({ length: AREA_PLOTS[a][1] }, (_, k) => AREA_PLOTS[a][0] + k);
+export const isVegPlot = (i: number) => plotArea(i) === 'veg';
 export const SLOT_COUNT = 6;
 
 /** Stage 0 — seed in the soil, 1 — sprout, 2 — bud, 3 — bloom (ready to collect). */
@@ -110,6 +156,69 @@ export const PLANTS: Record<PlantId, PlantDef> = {
     petals: 15,
     fact: 'Тыква растёт на длинной плети. Самые большие тыквы на конкурсах весят больше тонны — как маленький автомобиль!',
   },
+  cloudberry: {
+    id: 'cloudberry',
+    name: 'Морошка',
+    growMinutes: 6,
+    petals: 6,
+    fact: 'Морошка растёт на болотах тундры. Ягода сначала красная, а когда созреет — становится янтарно-жёлтой.',
+  },
+  dwarfbirch: {
+    id: 'dwarfbirch',
+    name: 'Карликовая берёза',
+    growMinutes: 9,
+    petals: 8,
+    fact: 'В тундре берёзка растёт всего по колено и стелется по земле — так ей легче пережить холод и ветер.',
+  },
+  lichen: {
+    id: 'lichen',
+    name: 'Ягель',
+    growMinutes: 14,
+    petals: 12,
+    fact: 'Ягель — это лишайник, а не мох. Он растёт всего на несколько миллиметров в год, а зимой его едят северные олени.',
+  },
+  lingonberry: {
+    id: 'lingonberry',
+    name: 'Брусника',
+    growMinutes: 7,
+    petals: 7,
+    fact: 'Брусника — вечнозелёный кустик: её кожистые листья зимуют зелёными прямо под снегом.',
+  },
+  cedar: {
+    id: 'cedar',
+    name: 'Кедр',
+    growMinutes: 16,
+    petals: 14,
+    fact: 'Сибирскую кедровую сосну все зовут кедром. Её шишки с орешками созревают больше года.',
+  },
+  blueberry: {
+    id: 'blueberry',
+    name: 'Черника',
+    growMinutes: 9,
+    petals: 9,
+    fact: 'Черника любит тень хвойного леса. От её ягод синеют язык и губы!',
+  },
+  feathergrass: {
+    id: 'feathergrass',
+    name: 'Ковыль',
+    growMinutes: 7,
+    petals: 7,
+    fact: 'Ковыль — главная трава степи. Его семена с пушистыми «пёрышками» ветер уносит далеко-далеко.',
+  },
+  steppetulip: {
+    id: 'steppetulip',
+    name: 'Тюльпан Шренка',
+    growMinutes: 12,
+    petals: 12,
+    fact: 'Дикий степной тюльпан цветёт весной всего несколько недель. Он редкий и занесён в Красную книгу России.',
+  },
+  wormwood: {
+    id: 'wormwood',
+    name: 'Полынь',
+    growMinutes: 8,
+    petals: 8,
+    fact: 'Серебристый пушок на листьях полыни защищает её от жаркого солнца и помогает беречь воду.',
+  },
 };
 
 /** Chance that a planted seed grows into a golden flower (after the first quests). */
@@ -131,6 +240,8 @@ export interface GuestDef {
   fact: string;
   /** Where the guest likes to be: 'meadow', 'flowers' (hovers over beds) or 'pond'. */
   home: 'meadow' | 'flowers' | 'pond';
+  /** Where the guest lives; zone animals appear only in their zone. */
+  area: 'garden' | ZoneId;
   /** How the guest appears in the garden, for the player. */
   hint: string;
 }
@@ -142,6 +253,7 @@ export const GUESTS: Record<GuestId, GuestDef> = {
     acc: 'божью коровку',
     petals: 1,
     home: 'meadow',
+    area: 'garden',
     hint: 'Заглядывает в сад с самого начала.',
     fact: 'Божьи коровки едят тлю — крошечных жучков, которые портят растения. Садовники им очень рады.',
   },
@@ -151,6 +263,7 @@ export const GUESTS: Record<GuestId, GuestDef> = {
     acc: 'улитку',
     petals: 1,
     home: 'meadow',
+    area: 'garden',
     hint: 'Медленно ползёт по траве — не пропусти.',
     fact: 'Улитка всю жизнь носит домик на спине, и домик растёт вместе с ней.',
   },
@@ -160,6 +273,7 @@ export const GUESTS: Record<GuestId, GuestDef> = {
     acc: 'пчелу',
     petals: 2,
     home: 'flowers',
+    area: 'garden',
     hint: 'Прилетает, когда в саду цветут цветы.',
     fact: 'Пчёлы рассказывают друг другу, где растут цветы, особым танцем.',
   },
@@ -169,6 +283,7 @@ export const GUESTS: Record<GuestId, GuestDef> = {
     acc: 'бабочку',
     petals: 2,
     home: 'flowers',
+    area: 'garden',
     hint: 'Любит сад, где собрано много разных цветов.',
     fact: 'Бабочки пробуют еду на вкус ногами: вкусовые датчики у них на лапках.',
   },
@@ -178,6 +293,7 @@ export const GUESTS: Record<GuestId, GuestDef> = {
     acc: 'ёжика',
     petals: 3,
     home: 'meadow',
+    area: 'garden',
     hint: 'Приходит по мостику, когда его починят.',
     fact: 'У ежа несколько тысяч иголок, а когда он пугается, то сворачивается в колючий шар.',
   },
@@ -187,8 +303,99 @@ export const GUESTS: Record<GuestId, GuestDef> = {
     acc: 'лягушку',
     petals: 3,
     home: 'pond',
+    area: 'garden',
     hint: 'Живёт у пруда, когда в нём есть вода.',
     fact: 'Лягушки почти не пьют ртом: воду они впитывают прямо через кожу.',
+  },
+  reindeer: {
+    id: 'reindeer',
+    name: 'Северный олень',
+    acc: 'северного оленя',
+    petals: 4,
+    home: 'meadow',
+    area: 'tundra',
+    hint: 'Живёт в тундре.',
+    fact: 'Рога у северных оленей растут и у самцов, и у самок. Широкие копыта не дают им проваливаться в снег.',
+  },
+  arcticfox: {
+    id: 'arcticfox',
+    name: 'Песец',
+    acc: 'песца',
+    petals: 4,
+    home: 'meadow',
+    area: 'tundra',
+    hint: 'Живёт в тундре.',
+    fact: 'Зимой шубка песца белоснежная, а летом становится бурой — так его труднее заметить.',
+  },
+  lemming: {
+    id: 'lemming',
+    name: 'Лемминг',
+    acc: 'лемминга',
+    petals: 3,
+    home: 'meadow',
+    area: 'tundra',
+    hint: 'Живёт в тундре.',
+    fact: 'Лемминги не впадают в спячку: зимой они роют ходы и гнёзда прямо под снегом.',
+  },
+  squirrel: {
+    id: 'squirrel',
+    name: 'Белка',
+    acc: 'белку',
+    petals: 3,
+    home: 'meadow',
+    area: 'taiga',
+    hint: 'Живёт в тайге.',
+    fact: 'Белка запасает на зиму орехи и грибы, а грибы сушит, развешивая их на ветках.',
+  },
+  chipmunk: {
+    id: 'chipmunk',
+    name: 'Бурундук',
+    acc: 'бурундука',
+    petals: 3,
+    home: 'meadow',
+    area: 'taiga',
+    hint: 'Живёт в тайге.',
+    fact: 'Бурундук носит запасы в защёчных мешках, а зиму проводит в норе, во сне.',
+  },
+  bear: {
+    id: 'bear',
+    name: 'Бурый медведь',
+    acc: 'бурого медведя',
+    petals: 5,
+    home: 'meadow',
+    area: 'taiga',
+    hint: 'Живёт в тайге.',
+    fact: 'Зимой бурый медведь спит в берлоге, а летом ест ягоды, корешки, орехи и рыбу.',
+  },
+  saiga: {
+    id: 'saiga',
+    name: 'Сайгак',
+    acc: 'сайгака',
+    petals: 5,
+    home: 'meadow',
+    area: 'steppe',
+    hint: 'Живёт в степи.',
+    fact: 'Нос-хоботок сайгака согревает морозный воздух зимой и задерживает пыль летом.',
+  },
+  gopher: {
+    id: 'gopher',
+    name: 'Суслик',
+    acc: 'суслика',
+    petals: 3,
+    home: 'meadow',
+    area: 'steppe',
+    hint: 'Живёт в степи.',
+    fact: 'Суслики встают столбиком, чтобы осмотреться, и свистом предупреждают друг друга об опасности.',
+  },
+  eagle: {
+    id: 'eagle',
+    name: 'Степной орёл',
+    acc: 'степного орла',
+    petals: 5,
+    home: 'meadow',
+    area: 'steppe',
+    hint: 'Живёт в степи.',
+    fact: 'Степной орёл вьёт гнездо прямо на земле или на холмике. Он занесён в Красную книгу России.',
   },
 };
 
@@ -242,7 +449,93 @@ export const LANDMARKS: Record<Landmark, LandmarkDef> = {
     availableFromQuest: 8,
     restoredText: 'Огород расчищен! Держи семена морковки и клубники.',
   },
+  tundra: {
+    id: 'tundra',
+    name: 'Тундра',
+    brokenName: 'Экспедиция в тундру',
+    price: 60,
+    availableFromQuest: 15,
+    restoredText: 'Мы в тундре! Здесь прохладно даже летом. Держи семена тундровых растений.',
+  },
+  taiga: {
+    id: 'taiga',
+    name: 'Тайга',
+    brokenName: 'Экспедиция в тайгу',
+    price: 80,
+    availableFromQuest: 16,
+    restoredText: 'Добро пожаловать в тайгу — бескрайний хвойный лес!',
+  },
+  steppe: {
+    id: 'steppe',
+    name: 'Степь',
+    brokenName: 'Экспедиция в степь',
+    price: 100,
+    availableFromQuest: 17,
+    restoredText: 'Вот она, степь: простор, ветер и травы до горизонта!',
+  },
 };
+
+export interface ZoneInfo {
+  id: ZoneId | 'arctic' | 'mixed' | 'desert';
+  name: string;
+  /** Climate and nature in two short sentences (4th grade «Окружающий мир»). */
+  text: string;
+  plants: string;
+  animals: string;
+  color: string;
+}
+
+/** Natural zones of Russia from north to south — the map and the atlas. */
+export const ZONE_ATLAS: ZoneInfo[] = [
+  {
+    id: 'arctic',
+    name: 'Арктическая пустыня',
+    text: 'Самая северная зона: почти круглый год лёд и снег, зимой — полярная ночь.',
+    plants: 'мхи, лишайники, полярный мак',
+    animals: 'белый медведь, морж, тюлень',
+    color: '#E8F1F7',
+  },
+  {
+    id: 'tundra',
+    name: 'Тундра',
+    text: 'Холодно, лето короткое, под землёй вечная мерзлота. Деревья низенькие и стелются по земле.',
+    plants: 'карликовая берёза, морошка, ягель',
+    animals: 'северный олень, песец, лемминг',
+    color: '#C9D3B0',
+  },
+  {
+    id: 'taiga',
+    name: 'Тайга',
+    text: 'Бескрайние хвойные леса: ель, пихта, сосна, лиственница, кедр. Зима долгая и снежная.',
+    plants: 'кедр, брусника, черника',
+    animals: 'белка, бурундук, бурый медведь',
+    color: '#5E8C5A',
+  },
+  {
+    id: 'mixed',
+    name: 'Смешанный лес',
+    text: 'Растут и хвойные, и лиственные деревья. Так выглядит природа вокруг Москвы — здесь наш сад!',
+    plants: 'дуб, липа, клён, ель, берёза',
+    animals: 'ёжик, лиса, заяц',
+    color: '#8CBF6A',
+  },
+  {
+    id: 'steppe',
+    name: 'Степь',
+    text: 'Тепло и сухо, деревьев почти нет — одни травы. Плодородные чернозёмы, поэтому много полей.',
+    plants: 'ковыль, тюльпан Шренка, полынь',
+    animals: 'сайгак, суслик, степной орёл',
+    color: '#E3C77A',
+  },
+  {
+    id: 'desert',
+    name: 'Полупустыня',
+    text: 'Жарко и очень сухо, растения редкие и выносливые.',
+    plants: 'полынь, верблюжья колючка',
+    animals: 'тушканчик, сайгак, ящерицы',
+    color: '#F0D9A8',
+  },
+];
 
 export const landmarkName = (id: Landmark) => LANDMARKS[id].name;
 
@@ -255,7 +548,8 @@ export type Goal =
   | { type: 'collection' }
   | { type: 'guests'; count: number }
   | { type: 'golden' }
-  | { type: 'orders'; count: number };
+  | { type: 'orders'; count: number }
+  | { type: 'meet'; guest: GuestId };
 
 export interface Reward {
   petals?: number;
@@ -407,11 +701,48 @@ export const QUESTS: Quest[] = [
       { type: 'harvest', plant: 'pumpkin' },
     ],
     reward: { petals: 25 },
-    doneText: 'Вот это урожай! Гости теперь будут просить и овощи тоже.',
+    doneText: 'Вот это урожай! А теперь — в путешествие по природным зонам России. Открой «Карту»!',
+  },
+  // Quests 16–18: natural zones (added in 0.4).
+  {
+    id: 'tundra',
+    title: 'Экспедиция в тундру',
+    text: 'Открой «Карту» и отправься в тундру — самую холодную зону, где растут деревья. Вырасти там морошку.',
+    goals: [
+      { type: 'restore', target: 'tundra' },
+      { type: 'harvest', plant: 'cloudberry' },
+    ],
+    reward: { petals: 20 },
+    doneText: 'Морошка — настоящее северное золото! Следующая остановка — тайга.',
+  },
+  {
+    id: 'taiga',
+    title: 'Хвойный лес',
+    text: 'Отправься в тайгу и вырасти бруснику и кедр.',
+    goals: [
+      { type: 'restore', target: 'taiga' },
+      { type: 'harvest', plant: 'lingonberry' },
+      { type: 'harvest', plant: 'cedar' },
+    ],
+    reward: { petals: 25 },
+    doneText: 'Белки будут рады кедровым орешкам! А теперь на юг — в степь.',
+  },
+  {
+    id: 'steppe',
+    title: 'Степные просторы',
+    text: 'Отправься в степь, вырасти редкий тюльпан Шренка и познакомься с сайгаком.',
+    goals: [
+      { type: 'restore', target: 'steppe' },
+      { type: 'harvest', plant: 'steppetulip' },
+      { type: 'meet', guest: 'saiga' },
+    ],
+    reward: { petals: 40 },
+    doneText: 'Ты прошёл Россию с севера на юг: тундра, тайга, смешанный лес, степь! Настоящий путешественник.',
   },
 ];
 
 export const LISTIK_TIPS = [
+  'На «Карте» природные зоны идут с севера на юг: тундра, тайга, смешанный лес, степь.',
   'Ночью сад засыпает, зажигаются фонарики, а лунный цветок светится ярче.',
   'Сфотографируй свой сад в «Меню» и покажи друзьям.',
   'Гости приходят ненадолго. Заметил гостя — нажми на него!',

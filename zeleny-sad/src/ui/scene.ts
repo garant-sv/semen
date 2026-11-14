@@ -1,7 +1,7 @@
 // The 2.5D garden diorama (SVG, viewBox 400×640). Static background is drawn once;
 // dynamic layers are re-rendered only when their markup changes.
 
-import { PLOT_COUNT, SLOT_COUNT, VEG_PLOT_COUNT, isVegPlot, type DecoId, type PlantId } from '../game/data';
+import { AREA_PLOTS, PLOT_COUNT, SLOT_COUNT, VEG_PLOT_COUNT, plotArea, type DecoId, type PlantId, type ZoneId } from '../game/data';
 import {
   gardenProgress,
   orderComplete,
@@ -25,6 +25,7 @@ import {
   shadow,
   waterBadge,
   wateringCan,
+  wildBed,
 } from './art';
 
 export const VIEW_W = 400;
@@ -59,8 +60,21 @@ if (PLOTS.length !== PLOT_COUNT || SLOTS.length !== SLOT_COUNT || VEG_PLOTS.leng
   throw new Error('scene layout mismatch');
 }
 
-/** Scene position of any bed (flower beds first, then vegetable beds). */
-export const plotPos = (i: number) => (isVegPlot(i) ? VEG_PLOTS[i - PLOT_COUNT] : PLOTS[i]);
+/** The three beds in each natural zone. */
+export const ZONE_PLOTS: { x: number; y: number }[] = [
+  { x: 104, y: 470 },
+  { x: 296, y: 470 },
+  { x: 200, y: 580 },
+];
+
+/** Scene position of any bed. */
+export function plotPos(i: number) {
+  const area = plotArea(i);
+  const k = i - AREA_PLOTS[area][0];
+  if (area === 'garden') return PLOTS[k];
+  if (area === 'veg') return VEG_PLOTS[k];
+  return ZONE_PLOTS[k];
+}
 
 // A tiny deterministic random generator, so the background looks the same every time.
 function rng(seed: number) {
@@ -276,7 +290,8 @@ export function plotSVG(s: GameState, i: number, now: number): string {
   const { x, y } = plotPos(i);
   const st = plotStatus(s, i, now);
   const p = s.plots[i];
-  let inner = plotBed(st === 'growing');
+  const area = plotArea(i);
+  let inner = area === 'garden' || area === 'veg' ? plotBed(st === 'growing') : wildBed(st === 'growing', area === 'steppe' ? '#7A5A3A' : area === 'tundra' ? '#6F6A50' : '#5E4A34');
   let badge = '';
   let label = `Грядка ${i + 1}`;
   const bloom = st === 'ready' && p.stage >= 3;
@@ -346,6 +361,62 @@ export function vegBackgroundSVG(): string {
 <path d="M18 370 Q200 352 382 370 L392 630 Q200 650 8 630Z" fill="#B88A5E" opacity=".5"/>${rows}
 <path d="M20 370 Q200 356 380 370" stroke="${C.woodDark}" stroke-width="3" fill="none"/>${border}
 ${shed}${barrel}`;
+}
+
+// ---------------------------------------------------------------- natural zones
+
+function fir(x: number, y: number, h: number, tone: string) {
+  const w = h * 0.38;
+  return `<g transform="translate(${x} ${y})"><rect x="-1.6" y="-6" width="3.2" height="7" fill="#4A3220"/><path d="M0 ${-h} L${w * 0.55} ${-h * 0.62} L${w * 0.32} ${-h * 0.62} L${w * 0.8} ${-h * 0.3} L${w * 0.5} ${-h * 0.3} L${w} -4 L${-w} -4 L${-w * 0.5} ${-h * 0.3} L${-w * 0.8} ${-h * 0.3} L${-w * 0.32} ${-h * 0.62} L${-w * 0.55} ${-h * 0.62}Z" fill="${tone}"/></g>`;
+}
+
+/** Static background of a natural zone. */
+export function zoneBackgroundSVG(zone: ZoneId): string {
+  const r = rng(zone === 'tundra' ? 23 : zone === 'taiga' ? 29 : 31);
+  if (zone === 'tundra') {
+    let snow = '';
+    for (let i = 0; i < 9; i++) snow += `<ellipse cx="${Math.round(r() * 400)}" cy="${Math.round(230 + r() * 400)}" rx="${10 + Math.round(r() * 18)}" ry="${3 + Math.round(r() * 4)}" fill="#F4F7F8" opacity=".85"/>`;
+    let shrubs = '';
+    for (let i = 0; i < 26; i++) {
+      const x = Math.round(r() * 400);
+      const y = Math.round(230 + r() * 410);
+      shrubs += `<circle cx="${x}" cy="${y}" r="${2 + Math.round(r() * 2)}" fill="${i % 3 ? '#8E9E6A' : '#B5874A'}"/>`;
+    }
+    return `<rect x="-400" y="-300" width="1200" height="520" fill="#DCE7EC"/><circle cx="320" cy="70" r="24" fill="#FFF3D6" opacity=".8"/>
+<path d="M-400 160 L-40 92 L40 140 L120 80 L210 136 L300 70 L400 128 L800 100 V220 H-400Z" fill="#B8C4C8"/><path d="M110 82 L120 80 L132 92 Z M290 76 L300 70 L312 84Z" fill="#F4F7F8"/>
+<path d="M-400 180 Q0 150 400 170 Q600 175 800 170 V230 H-400Z" fill="#AAB58C"/>
+<rect x="-400" y="200" width="1200" height="800" fill="#A8B887"/>${snow}<ellipse cx="320" cy="300" rx="44" ry="12" fill="#7FA9B4" opacity=".7"/><ellipse cx="70" cy="390" rx="34" ry="9" fill="#7FA9B4" opacity=".6"/>${shrubs}`;
+  }
+  if (zone === 'taiga') {
+    let far = '';
+    for (let x = -20; x < 430; x += 22) far += fir(x, 170 + Math.round(r() * 8), 54 + Math.round(r() * 26), '#3E6B45');
+    let near = '';
+    for (const [x, y, h] of [[18, 330, 110], [384, 320, 120], [40, 640, 120], [370, 640, 110], [350, 400, 90], [22, 470, 96]]) near += fir(x, y, h, '#2F5A36');
+    let moss = '';
+    for (let i = 0; i < 22; i++) moss += `<circle cx="${Math.round(r() * 400)}" cy="${Math.round(240 + r() * 400)}" r="${2 + Math.round(r() * 3)}" fill="${i % 4 ? '#5E8C4A' : '#D8303A'}"/>`;
+    const log = `<g transform="translate(200 360)"><rect x="-60" y="-9" width="120" height="18" rx="9" fill="#8A6A4A" stroke="#5E4530" stroke-width="1.4"/><ellipse cx="60" cy="0" rx="6" ry="9" fill="#C9A47A" stroke="#5E4530" stroke-width="1.2"/><g transform="translate(-30 -8)"><path d="M-3 0 v-6" stroke="#F1EAD8" stroke-width="2.4"/><ellipse cx="-3" cy="-7" rx="6" ry="3.4" fill="#C9302A"/><circle cx="-5" cy="-8" r=".9" fill="#fff"/><circle cx="-1" cy="-7.4" r=".9" fill="#fff"/></g></g>`;
+    return `<rect x="-400" y="-300" width="1200" height="520" fill="#DCEBE0"/>${far}<rect x="-400" y="176" width="1200" height="800" fill="#6E9A55"/>${moss}${log}${near}`;
+  }
+  let grass = '';
+  for (let i = 0; i < 60; i++) {
+    const x = Math.round(r() * 400);
+    const y = Math.round(220 + r() * 420);
+    grass += `<path d="M${x} ${y} q-2 -9 -5 -12 M${x} ${y} q1 -10 3 -14 M${x} ${y} q3 -8 7 -10" stroke="${i % 3 ? '#B39A52' : '#9A8A4A'}" stroke-width="1.4" fill="none"/>`;
+  }
+  let flowers = '';
+  for (let i = 0; i < 14; i++) flowers += `<circle cx="${Math.round(r() * 400)}" cy="${Math.round(260 + r() * 360)}" r="2" fill="${['#E5546B', '#F6D34B', '#B79BE3'][i % 3]}"/>`;
+  return `<rect x="-400" y="-300" width="1200" height="520" fill="#F7E8C8"/><circle cx="300" cy="70" r="28" fill="#FFD77A" opacity=".9"/>
+<path d="M-400 182 Q100 168 200 176 Q300 160 360 172 Q600 178 800 180 V230 H-400Z" fill="#CDB87A"/><path d="M230 176 Q260 150 292 176Z" fill="#B9A262"/>
+<rect x="-400" y="190" width="1200" height="800" fill="#D9C27A"/>${grass}${flowers}`;
+}
+
+/** Signpost in a natural zone that leads back home. */
+export function zoneBackSignSVG(): string {
+  return `<g class="signpost" data-go="garden" transform="translate(52 300)" role="button" aria-label="Указатель: вернуться домой, в сад">
+<rect x="-34" y="-66" width="68" height="74" fill="transparent"/>
+${shadow(12, 4, 1)}<rect x="-2.2" y="-52" width="4.4" height="52" fill="${C.woodDark}"/>
+<path d="M28 -54 H-14 L-24 -45 L-14 -36 H28Z" fill="#D9A06A" stroke="${C.woodDark}" stroke-width="1.6" stroke-linejoin="round"/>
+<text x="6" y="-41" font-size="11" font-weight="800" text-anchor="middle" fill="${C.ink}">Домой</text></g>`;
 }
 
 /** Signpost in the vegetable patch that leads back to the garden. */

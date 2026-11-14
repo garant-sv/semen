@@ -15,13 +15,17 @@ import {
   FLOWER_IDS,
   PLOT_COUNT,
   TOTAL_PLOTS,
-  isVeg,
-  isVegPlot,
+  AREA_PLANTS,
+  ZONE_IDS,
+  plantArea,
+  plotArea,
   QUESTS,
   SLOT_COUNT,
   type DecoId,
+  type AreaId,
   type Goal,
   type GuestId,
+  type ZoneId,
   type Landmark,
   type PlantId,
   type Quest,
@@ -29,7 +33,7 @@ import {
 } from './data';
 import { QUESTIONS, QUIZ_EVERY, QUIZ_FROM_QUEST, QUIZ_REWARD, QUIZ_TRY_REWARD, type Question } from './quiz';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export interface Plot {
   plant: PlantId | null;
@@ -119,7 +123,7 @@ export function newGame(now: number): GameState {
     unlockedPlants: ['daisy'],
     openPlots: 3,
     plots: Array.from({ length: TOTAL_PLOTS }, emptyPlot),
-    restored: { bridge: false, pond: false, veg: false },
+    restored: { bridge: false, pond: false, veg: false, tundra: false, taiga: false, steppe: false },
     decor: { owned, placed: Array.from({ length: SLOT_COUNT }, () => null) },
     collection: {},
     golden: {},
@@ -143,7 +147,8 @@ export function stageDurationMs(plant: PlantId): number {
 export type PlotStatus = 'locked' | 'empty' | 'thirsty' | 'growing' | 'ready';
 
 export function plotStatus(s: GameState, index: number, now: number): PlotStatus {
-  if (isVegPlot(index) ? !s.restored.veg : index >= s.openPlots) return 'locked';
+  const area = plotArea(index);
+  if (area === 'garden' ? index >= s.openPlots : !s.restored[area]) return 'locked';
   const p = s.plots[index];
   if (!p.plant) return 'empty';
   if (p.stage >= 3) return 'ready';
@@ -210,7 +215,7 @@ export function plantSeed(
   if (plotStatus(s, index, now) === 'locked') return fail('Эта грядка пока заросла.');
   if (s.plots[index].plant) return fail('На этой грядке уже что-то растёт.');
   if (!s.unlockedPlants.includes(plant)) return fail('Таких семян пока нет.');
-  if (isVeg(plant) !== isVegPlot(index)) return fail(isVeg(plant) ? 'Овощи растут в огороде.' : 'Цветы растут в саду.');
+  if (plantArea(plant) !== plotArea(index)) return fail('Это растение здесь не приживётся.');
   let golden = false;
   if (rand && s.questIndex >= GOLDEN_FROM_QUEST) {
     golden = s.stats.sinceGolden >= GOLDEN_PITY || rand() < GOLDEN_CHANCE;
@@ -271,9 +276,8 @@ export function restore(s: GameState, target: Landmark, now: number): Ok | Fail 
   if (s.petals < def.price) return fail(`Нужно ${def.price} лепестков, а у тебя ${s.petals}.`);
   s.petals -= def.price;
   s.restored[target] = true;
-  if (target === 'veg') {
-    for (const p of ['carrot', 'strawberry'] as const) if (!s.unlockedPlants.includes(p)) s.unlockedPlants.push(p);
-  }
+  const seeds = target === 'veg' ? (['carrot', 'strawberry'] as const) : (ZONE_IDS as readonly string[]).includes(target) ? AREA_PLANTS[target as ZoneId] : [];
+  for (const p of seeds) if (!s.unlockedPlants.includes(p)) s.unlockedPlants.push(p);
   s.updatedAt = now;
   return { ok: true };
 }
@@ -320,6 +324,8 @@ export function removeDecoration(s: GameState, slot: number, now: number): Ok<{ 
 /** Which guests may visit the garden right now. */
 export function guestCanVisit(s: GameState, id: GuestId): boolean {
   if (s.questIndex < 1) return false; // let the first seed be planted in peace
+  const area = GUESTS[id].area;
+  if (area !== 'garden') return s.restored[area];
   const blooming = s.plots.some((p, i) => i < s.openPlots && p.plant && p.stage >= 3);
   switch (id) {
     case 'ladybug':
@@ -333,11 +339,14 @@ export function guestCanVisit(s: GameState, id: GuestId): boolean {
       return s.restored.bridge;
     case 'frog':
       return s.restored.pond;
+    default:
+      return false;
   }
 }
 
-export function visitingGuests(s: GameState): GuestId[] {
-  return GUEST_IDS.filter((id) => guestCanVisit(s, id));
+/** Guests that may show up in the given part of the world (none in the vegetable patch). */
+export function visitingGuests(s: GameState, where: AreaId = 'garden'): GuestId[] {
+  return GUEST_IDS.filter((id) => GUESTS[id].area === where && guestCanVisit(s, id));
 }
 
 /** Bonus for the very first meeting with a guest. */
@@ -450,6 +459,8 @@ export function goalDone(s: GameState, g: Goal): boolean {
       return Object.values(s.golden).some((n) => (n ?? 0) > 0);
     case 'orders':
       return s.ordersDone >= g.count;
+    case 'meet':
+      return !!s.guests[g.guest];
   }
 }
 
