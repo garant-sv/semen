@@ -768,6 +768,25 @@ button.card:active {
   animation: fly2 22s ease-in-out infinite;
 }
 
+.butterfly.b3 {
+  animation: fly3 26s ease-in-out infinite;
+}
+
+/* «Живое 2,5D» (0.8): grass sways from its root, each tuft a little out of step. */
+.grass {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: grassSway 3.6s ease-in-out infinite alternate;
+}
+
+.grass.front {
+  animation-duration: 4.4s;
+}
+
+#l-front {
+  pointer-events: none;
+}
+
 .butterfly .wings {
   animation: flap 0.35s ease-in-out infinite alternate;
   transform-origin: center;
@@ -904,6 +923,34 @@ button.card:active {
   }
   60% {
     transform: translate(80px, 560px);
+  }
+}
+
+@keyframes fly3 {
+  0%,
+  100% {
+    transform: translate(200px, 250px);
+  }
+  20% {
+    transform: translate(110px, 330px);
+  }
+  45% {
+    transform: translate(150px, 470px);
+  }
+  70% {
+    transform: translate(300px, 420px);
+  }
+  85% {
+    transform: translate(360px, 300px);
+  }
+}
+
+@keyframes grassSway {
+  from {
+    transform: skewX(-5deg);
+  }
+  to {
+    transform: skewX(5deg);
   }
 }
 

@@ -104,7 +104,8 @@ export function backgroundSVG(seed = 7): string {
   for (let i = 0; i < 46; i++) {
     const x = Math.round(r() * 400);
     const y = Math.round(200 + r() * 440);
-    tufts += tuft(x, y, r() > 0.5 ? '#86BC62' : '#6EA650');
+    const t = tuft(x, y, r() > 0.5 ? '#86BC62' : '#6EA650');
+    tufts += i % 2 ? t : `<g class="grass" style="animation-delay:-${(i % 7) * 0.45}s">${t}</g>`;
   }
   let flowers = '';
   for (let i = 0; i < 18; i++) {
@@ -129,12 +130,12 @@ export function backgroundSVG(seed = 7): string {
   }
   fence += `<path d="M0 172 L290 174 M360 174 L400 172" stroke="${C.woodDark}" stroke-width="3"/>`;
   return `
-<rect x="-400" y="-300" width="1200" height="500" fill="url(#gSky)"/>
+<g data-z="far"><rect x="-400" y="-300" width="1200" height="500" fill="url(#gSky)"/>
 <circle cx="330" cy="58" r="30" fill="#FFE6A6" opacity=".85"/>
 ${cloud(80, 52, 1)}${cloud(250, 34, 0.8, 'drift slow')}
-<path d="M-400 150 Q-200 110 0 140 Q80 96 170 128 T400 118 Q600 100 800 140 V200 H-400Z" fill="#B9D79A"/>
-<path d="M-400 170 Q-200 140 0 160 Q110 128 220 150 T400 146 Q600 140 800 160 V210 H-400Z" fill="#A3CB83"/>
-${trees}
+<path d="M-400 150 Q-200 110 0 140 Q80 96 170 128 T400 118 Q600 100 800 140 V200 H-400Z" fill="#B9D79A"/></g>
+<g data-z="mid"><path d="M-400 170 Q-200 140 0 160 Q110 128 220 150 T400 146 Q600 140 800 160 V210 H-400Z" fill="#A3CB83"/>
+${trees}</g>
 <rect x="-400" y="170" width="1200" height="800" fill="url(#gMeadow)"/>
 ${fence}
 <path d="M20 640 C60 600 150 610 200 596 C250 584 330 600 400 580 V640Z" fill="#6EA650" opacity=".35"/>
@@ -264,8 +265,10 @@ export function lifeSVG(s: GameState): string {
   let out = '';
   const butterfly = (cls: string, a: string, b: string) =>
     `<g class="butterfly ${cls}"><g class="wings"><ellipse cx="-4" cy="0" rx="4.5" ry="3.4" fill="${a}" stroke="${C.ink}" stroke-width=".5"/><ellipse cx="4" cy="0" rx="4.5" ry="3.4" fill="${b}" stroke="${C.ink}" stroke-width=".5"/></g><rect x="-.6" y="-3" width="1.2" height="6" rx=".6" fill="${C.ink}"/></g>`;
-  if (p > 0.15) out += butterfly('b1', '#F6BE3B', '#F6D16B');
-  if (p > 0.45) out += butterfly('b2', '#F59AAA', '#F7B8C3');
+  // One butterfly is there from the very start, so even a sleepy garden feels alive.
+  out += butterfly('b1', '#F6BE3B', '#F6D16B');
+  if (p > 0.3) out += butterfly('b2', '#F59AAA', '#F7B8C3');
+  if (p > 0.7) out += butterfly('b3', '#9FC7F0', '#C3DDF7');
   if (s.restored.pond) {
     out += `<g class="fireflies">${[
       [60, 270], [150, 300], [40, 340], [180, 350],
@@ -274,6 +277,28 @@ export function lifeSVG(s: GameState): string {
       .join('')}</g>`;
   }
   return out;
+}
+
+/**
+ * Grass in front of everything, at the bottom corners of the scene: the nearest depth layer.
+ * It never takes taps and stays clear of the beds and decoration places.
+ */
+export function frontSVG(area: 'garden' | 'veg' | ZoneId): string {
+  const tone =
+    area === 'tundra' ? ['#8E9E6A', '#7D8D5C'] : area === 'steppe' ? ['#B39A52', '#9A8A4A'] : area === 'taiga' ? ['#4F7F3E', '#3F6E33'] : ['#5E9A45', '#4C8A3A'];
+  const blade = (x: number, h: number, lean: number, c: string) =>
+    `<path d="M${x - 3} 660 Q${x - 2 + lean * 0.4} ${660 - h * 0.6} ${x + lean} ${660 - h} Q${x + 1 + lean * 0.3} ${660 - h * 0.5} ${x + 3} 660Z" fill="${c}"/>`;
+  const clump = (x0: number, dir: 1 | -1, n: number) => {
+    let out = '';
+    for (let i = 0; i < n; i++) {
+      const x = x0 + dir * i * 7;
+      const h = 34 + ((i * 13) % 5) * 7 - i * 4;
+      out += blade(x, h, dir * (4 + (i % 3) * 3), tone[i % 2]);
+    }
+    return out;
+  };
+  const sway = (inner: string, d: number) => `<g class="grass front" style="animation-delay:-${d}s">${inner}</g>`;
+  return `<g pointer-events="none">${sway(clump(-4, 1, 6), 0.4)}${sway(clump(404, -1, 6), 1.6)}${sway(blade(108, 16, 3, tone[0]) + blade(114, 12, -2, tone[1]), 2.3)}${sway(blade(296, 15, -3, tone[1]) + blade(302, 11, 2, tone[0]), 0.9)}</g>`;
 }
 
 // ---------------------------------------------------------------- plots & slots
@@ -395,9 +420,9 @@ export function zoneBackgroundSVG(zone: ZoneId): string {
       const y = Math.round(230 + r() * 410);
       shrubs += `<circle cx="${x}" cy="${y}" r="${2 + Math.round(r() * 2)}" fill="${i % 3 ? '#8E9E6A' : '#B5874A'}"/>`;
     }
-    return `<rect x="-400" y="-300" width="1200" height="520" fill="#DCE7EC"/><circle cx="320" cy="70" r="24" fill="#FFF3D6" opacity=".8"/>
-<path d="M-400 160 L-40 92 L40 140 L120 80 L210 136 L300 70 L400 128 L800 100 V220 H-400Z" fill="#B8C4C8"/><path d="M110 82 L120 80 L132 92 Z M290 76 L300 70 L312 84Z" fill="#F4F7F8"/>
-<path d="M-400 180 Q0 150 400 170 Q600 175 800 170 V230 H-400Z" fill="#AAB58C"/>
+    return `<g data-z="far"><rect x="-400" y="-300" width="1200" height="520" fill="#DCE7EC"/><circle cx="320" cy="70" r="24" fill="#FFF3D6" opacity=".8"/>
+<path d="M-400 160 L-40 92 L40 140 L120 80 L210 136 L300 70 L400 128 L800 100 V220 H-400Z" fill="#B8C4C8"/><path d="M110 82 L120 80 L132 92 Z M290 76 L300 70 L312 84Z" fill="#F4F7F8"/></g>
+<g data-z="mid"><path d="M-400 180 Q0 150 400 170 Q600 175 800 170 V230 H-400Z" fill="#AAB58C"/></g>
 <rect x="-400" y="200" width="1200" height="800" fill="#A8B887"/>${snow}<ellipse cx="320" cy="300" rx="44" ry="12" fill="#7FA9B4" opacity=".7"/><ellipse cx="70" cy="390" rx="34" ry="9" fill="#7FA9B4" opacity=".6"/>${shrubs}`;
   }
   if (zone === 'taiga') {
@@ -408,18 +433,19 @@ export function zoneBackgroundSVG(zone: ZoneId): string {
     let moss = '';
     for (let i = 0; i < 22; i++) moss += `<circle cx="${Math.round(r() * 400)}" cy="${Math.round(240 + r() * 400)}" r="${2 + Math.round(r() * 3)}" fill="${i % 4 ? '#5E8C4A' : '#D8303A'}"/>`;
     const log = `<g transform="translate(200 360)"><rect x="-60" y="-9" width="120" height="18" rx="9" fill="#8A6A4A" stroke="#5E4530" stroke-width="1.4"/><ellipse cx="60" cy="0" rx="6" ry="9" fill="#C9A47A" stroke="#5E4530" stroke-width="1.2"/><g transform="translate(-30 -8)"><path d="M-3 0 v-6" stroke="#F1EAD8" stroke-width="2.4"/><ellipse cx="-3" cy="-7" rx="6" ry="3.4" fill="#C9302A"/><circle cx="-5" cy="-8" r=".9" fill="#fff"/><circle cx="-1" cy="-7.4" r=".9" fill="#fff"/></g></g>`;
-    return `<rect x="-400" y="-300" width="1200" height="520" fill="#DCEBE0"/>${far}<rect x="-400" y="176" width="1200" height="800" fill="#6E9A55"/>${moss}${log}${near}`;
+    return `<g data-z="far"><rect x="-400" y="-300" width="1200" height="520" fill="#DCEBE0"/></g><g data-z="mid">${far}</g><rect x="-400" y="176" width="1200" height="800" fill="#6E9A55"/>${moss}${log}<g data-z="near">${near}</g>`;
   }
   let grass = '';
   for (let i = 0; i < 60; i++) {
     const x = Math.round(r() * 400);
     const y = Math.round(220 + r() * 420);
-    grass += `<path d="M${x} ${y} q-2 -9 -5 -12 M${x} ${y} q1 -10 3 -14 M${x} ${y} q3 -8 7 -10" stroke="${i % 3 ? '#B39A52' : '#9A8A4A'}" stroke-width="1.4" fill="none"/>`;
+    const g = `<path d="M${x} ${y} q-2 -9 -5 -12 M${x} ${y} q1 -10 3 -14 M${x} ${y} q3 -8 7 -10" stroke="${i % 3 ? '#B39A52' : '#9A8A4A'}" stroke-width="1.4" fill="none"/>`;
+    grass += i % 2 ? g : `<g class="grass" style="animation-delay:-${(i % 7) * 0.45}s">${g}</g>`;
   }
   let flowers = '';
   for (let i = 0; i < 14; i++) flowers += `<circle cx="${Math.round(r() * 400)}" cy="${Math.round(260 + r() * 360)}" r="2" fill="${['#E5546B', '#F6D34B', '#B79BE3'][i % 3]}"/>`;
-  return `<rect x="-400" y="-300" width="1200" height="520" fill="#F7E8C8"/><circle cx="300" cy="70" r="28" fill="#FFD77A" opacity=".9"/>
-<path d="M-400 182 Q100 168 200 176 Q300 160 360 172 Q600 178 800 180 V230 H-400Z" fill="#CDB87A"/><path d="M230 176 Q260 150 292 176Z" fill="#B9A262"/>
+  return `<g data-z="far"><rect x="-400" y="-300" width="1200" height="520" fill="#F7E8C8"/><circle cx="300" cy="70" r="28" fill="#FFD77A" opacity=".9"/></g>
+<g data-z="mid"><path d="M-400 182 Q100 168 200 176 Q300 160 360 172 Q600 178 800 180 V230 H-400Z" fill="#CDB87A"/><path d="M230 176 Q260 150 292 176Z" fill="#B9A262"/></g>
 <rect x="-400" y="190" width="1200" height="800" fill="#D9C27A"/>${grass}${flowers}`;
 }
 
