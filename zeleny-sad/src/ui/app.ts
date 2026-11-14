@@ -38,6 +38,7 @@ import {
   buyDecoration,
   advanceFair,
   answerQuiz,
+  answerSign,
   checkQuests,
   checkQuiz,
   claimOrder,
@@ -80,6 +81,7 @@ import {
 import { BADGES, earned, newBadges } from '../game/badges';
 import type { Question } from '../game/quiz';
 import { fairLevel, makeProblem, type MathProblem } from '../game/math';
+import { NO_LETTER, RULES, WORDS, viewWord, type RuleId } from '../game/russian';
 import { ICONS, SHARED_DEFS, decoIcon, guestArt, guestIcon, listik, medalIcon, petalIcon, plantIcon, starIcon } from './art';
 import {
   BOARD,
@@ -165,6 +167,15 @@ const ZONE_SPOTS: [number, number][] = [
 
 const AREA_NAME: Record<AreaId, string> = { garden: 'Сад', veg: 'Огород', tundra: 'Тундра', taiga: 'Тайга', steppe: 'Степь' };
 
+const escapeWord = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+/** The masked word with the gap filled in and the inserted letter highlighted. */
+function highlightWord(masked: string, answer: string): string {
+  const k = masked.lastIndexOf('_');
+  const ins = answer === NO_LETTER ? '<i class="gap-none">·</i>' : `<i class="gap-fill">${escapeWord(answer)}</i>`;
+  return `${escapeWord(masked.slice(0, k))}${ins}${escapeWord(masked.slice(k + 1))}`;
+}
+
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 const $ = <T extends Element = HTMLElement>(root: ParentNode, sel: string) => root.querySelector(sel) as T;
@@ -201,7 +212,7 @@ export class App {
   private flying = 0;
   private guest: { id: GuestId; x: number; y: number; el: SVGGElement; leaveAt: number } | null = null;
   private nextGuestAt = 0;
-  private collectionTab: 'plants' | 'guests' | 'badges' = 'plants';
+  private collectionTab: 'plants' | 'guests' | 'words' | 'badges' = 'plants';
   /** Which part of the world is shown: the flower garden or the vegetable patch. */
   private view: AreaId = 'garden';
   private phase: DayPhase = 'day';
@@ -633,6 +644,8 @@ export class App {
       this.renderQuest();
     }
     if (t.closest('[data-guest]')) return this.onGuest();
+    const sign = t.closest<SVGGElement>('[data-sign]');
+    if (sign && this.mode === 'garden') return this.showSign(Number(sign.dataset.sign));
     const go = t.closest<SVGGElement>('[data-go]');
     if (go && this.mode === 'garden') return this.onSign(go.dataset.go as AreaId);
     if (slot && this.mode === 'decor') return this.onSlot(Number(slot.dataset.slot));
@@ -818,6 +831,10 @@ export class App {
           this.fx(plantFx(x, y), 900);
           this.commit();
           this.animate(`plot-${plot}`, 'anim-plant', 900);
+          const signs = this.state.plots.filter((x) => x.sign).length;
+          if (this.state.plots[plot].sign && this.state.rus.total === 0 && signs === 1) {
+            window.setTimeout(() => this.toast('Листик: у грядки появилась табличка, но в слове пропущена буква. Нажми на табличку!'), 900);
+          }
         } else this.toast(r.reason, 'warn');
       }),
     );
@@ -934,7 +951,18 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
         const gold = s.golden[id] ? `<span class="gold-tag">${starIcon(14)} золотых: ${s.golden[id]}</span>` : '';
         return `<div class="card book${s.golden[id] ? ' has-gold' : ''}">${plantIcon(id, 3, 72)}<b>${def.name}${def.magic ? ' <span class="magic">волшебный</span>' : ''}</b><small>Собрано: ${e.count} ${gold}</small><p>${def.fact}</p></div>`;
     };
-    if (this.collectionTab === 'badges') {
+    if (this.collectionTab === 'words') {
+      const learned = new Set(s.rus.learned);
+      const groups = (Object.keys(RULES) as RuleId[])
+        .map((rule) => {
+          const words = WORDS.filter((w) => w.rule === rule && learned.has(w.id));
+          const all = WORDS.filter((w) => w.rule === rule).length;
+          const chips = words.map((w) => `<span class="word-chip" title="${w.why.replace(/"/g, '&quot;')}">${viewWord(w).full}</span>`).join('');
+          return `<h3 class="sub">${RULES[rule]} <span class="muted small">${words.length}/${all}</span></h3><div class="word-chips">${chips || '<span class="muted small">Пока пусто — заполняй таблички у грядок.</span>'}</div>`;
+        })
+        .join('');
+      body = `<p class="muted">Слова, которые ты правильно вписал на табличках: ${learned.size} из ${WORDS.length}. Таблички появляются у грядок после посадки.</p>${groups}`;
+    } else if (this.collectionTab === 'badges') {
       const cards = BADGES.map((b) => {
         const [n, goal] = b.progress(s);
         const got = n >= goal;
@@ -965,14 +993,14 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       );
       body = `<p class="muted">Встречено ${guestsFound} из ${GUEST_IDS.length}. Гости приходят ненадолго — нажми на гостя, чтобы познакомиться.</p>${groups.join('')}`;
     }
-    const tab = (id: 'plants' | 'guests' | 'badges', label: string, n: number, total: number) =>
+    const tab = (id: 'plants' | 'guests' | 'words' | 'badges', label: string, n: number, total: number) =>
       `<button type="button" class="tab${this.collectionTab === id ? ' active' : ''}" data-tab="${id}">${label} <span>${n}/${total}</span></button>`;
     const sheet = this.openSheet(
-      `<h2>Коллекция</h2><div class="tabs" role="tablist">${tab('plants', 'Растения', plantsFound, PLANT_IDS.length)}${tab('guests', 'Гости', guestsFound, GUEST_IDS.length)}${tab('badges', 'Значки', earned(s).length, BADGES.length)}</div>${body}`,
+      `<h2>Коллекция</h2><div class="tabs" role="tablist">${tab('plants', 'Растения', plantsFound, PLANT_IDS.length)}${tab('guests', 'Гости', guestsFound, GUEST_IDS.length)}${tab('words', 'Слова', s.rus.learned.length, WORDS.length)}${tab('badges', 'Значки', earned(s).length, BADGES.length)}</div>${body}`,
     );
     sheet.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) =>
       b.addEventListener('click', () => {
-        this.collectionTab = b.dataset.tab as 'plants' | 'guests' | 'badges';
+        this.collectionTab = b.dataset.tab as 'plants' | 'guests' | 'words' | 'badges';
         play('tap');
         this.showCollection();
       }),
@@ -1041,6 +1069,49 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
         $(sheet, '.answers').after(box);
         $(box, '[data-act="ok"]').addEventListener('click', () => this.closeSheet());
         box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        this.commit();
+        this.bumpPetals();
+      }),
+    );
+  }
+
+  // ------------------------------------------------------------ signs (Russian)
+
+  private showSign(i: number) {
+    const sign = this.state.plots[i]?.sign;
+    const w = sign && WORDS.find((x) => x.id === sign.id);
+    if (!sign || !w) return;
+    const v = viewWord(w);
+    play('tap');
+    if (sign.solved) {
+      this.toast(`«${v.full}» — ${RULES[w.rule].toLowerCase()}. ${w.why}`);
+      return;
+    }
+    const options = [...w.options].sort(() => Math.random() - 0.5);
+    const sheet = this.openSheet(`<p class="eyebrow">Табличка у грядки · ${RULES[w.rule]}</p><h2>Вставь пропущенную букву</h2>
+<div class="word-sign"><span data-word>${escapeWord(v.masked)}</span></div>
+<div class="letters">${options.map((o, k) => `<button type="button" class="btn letter${o === NO_LETTER ? ' none' : ''}" data-opt="${k}">${o}</button>`).join('')}</div>
+<div data-result></div>`);
+    sheet.querySelectorAll<HTMLButtonElement>('[data-opt]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const choice = options[Number(b.dataset.opt)];
+        const r = answerSign(this.state, i, choice, this.now());
+        if (!r.ok) return;
+        sheet.querySelectorAll<HTMLButtonElement>('[data-opt]').forEach((x) => {
+          x.disabled = true;
+          const opt = options[Number(x.dataset.opt)];
+          if (opt === r.answer) x.classList.add('right');
+          else if (x === b) x.classList.add('wrong');
+        });
+        $(sheet, '[data-word]').innerHTML = highlightWord(v.masked, r.answer);
+        $(sheet, '.word-sign').classList.add(r.correct ? 'ok' : 'fix');
+        const box = document.createElement('div');
+        box.className = `explain ${r.correct ? 'ok' : 'try'}`;
+        box.innerHTML = `<b>${r.correct ? `Верно! +${r.petals}` : `Правильно: ${r.answer === NO_LETTER ? 'без буквы' : `«${r.answer}»`}. +${r.petals} за старание`}</b><p></p><button type="button" class="btn primary wide" data-act="ok">${r.correct ? 'Ура!' : 'Понятно'}</button>`;
+        $(box, 'p').textContent = w.why;
+        $(sheet, '[data-result]').replaceChildren(box);
+        $(box, '[data-act="ok"]').addEventListener('click', () => this.closeSheet());
+        play(r.correct ? 'quest' : 'tap');
         this.commit();
         this.bumpPetals();
       }),

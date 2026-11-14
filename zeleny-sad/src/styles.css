@@ -1928,3 +1928,128 @@ button.card:active {
   50% { transform: translateX(8px); }
   75% { transform: translateX(-4px); }
 }
+
+/* ------------------------------------------------------------ v0.6: signs at the beds (Russian) */
+
+.sign {
+  cursor: pointer;
+}
+
+.sign.todo {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: signWiggle 2.6s ease-in-out infinite;
+}
+
+.word-sign {
+  margin: 14px auto 16px;
+  padding: 18px 12px;
+  max-width: 420px;
+  border-radius: 14px;
+  background: #f4e3c3;
+  border: 3px solid #7a5230;
+  box-shadow: 0 5px 0 #7a5230;
+  text-align: center;
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  line-height: 1.15;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.word-sign.ok {
+  background: #e7f4d6;
+}
+
+.word-sign.fix {
+  background: #fff1d6;
+}
+
+.word-sign .gap-fill,
+.word-sign .gap-none {
+  font-style: normal;
+  color: #3e8e3a;
+  text-decoration: underline;
+  text-decoration-thickness: 3px;
+}
+
+.word-sign.fix .gap-fill,
+.word-sign.fix .gap-none {
+  color: #b5543f;
+}
+
+.letters {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.btn.letter {
+  min-width: 84px;
+  min-height: 72px;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.btn.letter.none {
+  font-size: 17px;
+  min-width: 120px;
+}
+
+.btn.letter.right {
+  background: #e3f3d1;
+  border-color: #7fb069;
+  box-shadow: 0 3px 0 #7fb069;
+  opacity: 1;
+}
+
+.btn.letter.wrong {
+  background: #fde7e2;
+  border-color: #e9a597;
+  box-shadow: 0 3px 0 #e9a597;
+  opacity: 1;
+}
+
+.word-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.word-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid var(--cream-3);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.tabs {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.tab {
+  font-size: 14px;
+  padding: 4px 2px;
+  line-height: 1.15;
+}
+
+.tab span {
+  display: block;
+  font-size: 12px;
+}
+
+@keyframes signWiggle {
+  0%, 80%, 100% { transform: rotate(0deg); }
+  85% { transform: rotate(-6deg); }
+  90% { transform: rotate(5deg); }
+  95% { transform: rotate(-3deg); }
+}
+
+/* A sheet that starts with an eyebrow line keeps it clear of the close button. */
+.sheet-close + .eyebrow {
+  margin-right: 56px !important;
+}

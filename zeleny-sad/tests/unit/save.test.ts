@@ -118,7 +118,7 @@ describe('migrations', () => {
     expect(state.version).toBe(SAVE_VERSION);
     expect(state.settings.sound).toBe(true);
     expect(state.stats).toEqual({ planted: { daisy: 1, sunflower: 1 }, watered: 1, harvested: 2, sinceGolden: 0, sinceQuiz: 0 });
-    expect(state.plots[0]).toEqual({ plant: 'sunflower', stage: 1, wateredAt: null, plantedAt: null, golden: false });
+    expect(state.plots[0]).toEqual({ plant: 'sunflower', stage: 1, wateredAt: null, plantedAt: null, golden: false, sign: null });
     expect(state.petals).toBe(12);
     expect(state.guests).toEqual({});
     expect(state.order).toBeNull();
@@ -134,7 +134,7 @@ describe('migrations', () => {
     };
     const { state, migratedFrom } = parseSave(JSON.stringify(v2), T0);
     expect(migratedFrom).toBe(2);
-    expect(state.plots[0]).toEqual({ plant: 'tulip', stage: 2, wateredAt: T0, plantedAt: T0, golden: false });
+    expect(state.plots[0]).toEqual({ plant: 'tulip', stage: 2, wateredAt: T0, plantedAt: T0, golden: false, sign: null });
     expect(state.stats).toEqual({ planted: { daisy: 2 }, watered: 5, harvested: 2, sinceGolden: 0, sinceQuiz: 0 });
     expect(state.settings.sound).toBe(false);
     expect(state).toMatchObject({ golden: {}, guests: {}, order: null, ordersDone: 0, petals: 12, questIndex: 3 });

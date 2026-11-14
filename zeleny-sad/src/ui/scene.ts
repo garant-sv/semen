@@ -2,6 +2,7 @@
 // dynamic layers are re-rendered only when their markup changes.
 
 import { AREA_PLOTS, PLOT_COUNT, SLOT_COUNT, VEG_PLOT_COUNT, plotArea, type DecoId, type PlantId, type ZoneId } from '../game/data';
+import { WORDS, viewWord } from '../game/russian';
 import {
   fairAvailable,
   gardenProgress,
@@ -308,7 +309,18 @@ export function plotSVG(s: GameState, i: number, now: number): string {
     label += ': пустая';
   }
   const cls = `plot st-${st}${bloom ? ' bloom' : ''}${bloom && p.golden ? ' golden' : ''}`;
-  return `<g class="${cls}" data-plot="${i}" transform="translate(${x} ${y})" role="button" aria-label="${label}"><rect x="-58" y="-96" width="116" height="134" fill="transparent"/>${inner}${badge}</g>`;
+  return `<g class="${cls}" data-plot="${i}" transform="translate(${x} ${y})" role="button" aria-label="${label}"><rect x="-58" y="-96" width="116" height="134" fill="transparent"/>${inner}${badge}${p.plant && p.sign && st !== 'locked' ? signSVG(i, p.sign) : ''}</g>`;
+}
+
+/** A little wooden sign at the left of a bed: «?» until the word is filled in, then the word. */
+function signSVG(i: number, sign: { id: string; solved: boolean }): string {
+  const w = WORDS.find((x) => x.id === sign.id);
+  if (!w) return '';
+  const label = w.label ?? viewWord(w).full;
+  const text = sign.solved
+    ? `<text x="-50" y="-23.5" font-size="7.4" font-weight="800" text-anchor="middle" fill="${C.ink}"${label.length > 8 ? ' textLength="38" lengthAdjust="spacingAndGlyphs"' : ''}>${label}</text>`
+    : `<text x="-50" y="-22" font-size="12" font-weight="900" text-anchor="middle" fill="#B5543F">?</text>`;
+  return `<g class="sign${sign.solved ? ' solved' : ' todo'}" data-sign="${i}" role="button" aria-label="${sign.solved ? `Табличка: ${label}` : 'Табличка: вставь пропущенную букву'}"><rect x="-74" y="-46" width="48" height="52" fill="transparent"/><rect x="-51.6" y="-20" width="3.2" height="22" fill="${C.woodDark}"/><rect x="-71" y="-34" width="42" height="16" rx="2.4" fill="${sign.solved ? '#F4E3C3' : '#FFF6E3'}" stroke="${C.woodDark}" stroke-width="1.3"/>${text}</g>`;
 }
 
 export function plotBarSVG(s: GameState, i: number, now: number): string {

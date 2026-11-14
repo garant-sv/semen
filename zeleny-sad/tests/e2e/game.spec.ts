@@ -429,3 +429,49 @@ test('harvest fair: a customer asks a math problem; hint after a mistake, petals
   await page.locator('[data-fair]').click({ force: true }); // the badge bobs
   await expect(page.getByRole('heading', { name: 'Покупателей пока нет' })).toBeVisible();
 });
+
+test('signs at the beds: fill in the missing letter, the word goes to the word list', async ({ page }) => {
+  const now = new Date('2026-11-01T12:00:00').getTime();
+  await page.clock.install({ time: now });
+  const empty = { plant: null, stage: 0, wateredAt: null, plantedAt: null, golden: false, sign: null };
+  const plots: Record<string, unknown>[] = Array.from({ length: 19 }, () => empty);
+  plots[0] = { plant: 'daisy', stage: 1, wateredAt: null, plantedAt: now, golden: false, sign: { id: 'morkov', solved: false } };
+  plots[1] = { plant: 'sunflower', stage: 2, wateredAt: null, plantedAt: now, golden: false, sign: { id: 'myach', solved: false } };
+  const save = {
+    version: 7, createdAt: now, updatedAt: now, petals: 0,
+    unlockedPlants: ['daisy', 'sunflower'], openPlots: 4, plots,
+    restored: { bridge: false, pond: false, veg: false, tundra: false, taiga: false, steppe: false },
+    decor: { owned: {}, placed: [] }, collection: { daisy: { firstAt: now, count: 1 } }, golden: {}, guests: {}, order: null, ordersDone: 0, questIndex: 4,
+    stats: { planted: { daisy: 2 }, watered: 3, harvested: 1, sinceGolden: 0, sinceQuiz: 0 },
+    badges: [], quiz: { pending: false, solved: [], correct: 0, asked: 0 },
+    fair: { queue: 0, lastAt: now, solved: 0, firstTry: 0 }, rus: { learned: [], correct: 0, total: 0 },
+    settings: { sound: false },
+  };
+  await page.addInitScript((s) => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    localStorage.setItem('green-garden/save', s);
+  }, JSON.stringify(save));
+  await page.goto('/');
+  await noGuests(page);
+  await expect(page.locator('[data-sign="0"]')).toHaveClass(/todo/);
+  await page.locator('[data-sign="0"]').click({ force: true }); // the sign wiggles
+  await expect(page.locator('.word-sign')).toContainText('м_рковь');
+  await shots(page, '17-sign');
+  await page.locator('.btn.letter', { hasText: /^о$/ }).click();
+  await expect(page.locator('.explain.ok')).toContainText('Верно! +3');
+  await expect(page.locator('.word-sign')).toContainText('морковь');
+  await page.getByRole('button', { name: 'Ура!' }).click();
+  await expect(page.locator('[data-sign="0"]')).toHaveClass(/solved/);
+  // A wrong answer: the correct one is shown with the rule, +1 for trying.
+  await page.locator('[data-sign="1"]').click({ force: true });
+  await page.locator('.btn.letter', { hasText: /^ь$/ }).click();
+  await expect(page.locator('.explain.try')).toContainText('без буквы');
+  await expect(page.locator('.explain.try')).toContainText('мужской род');
+  await page.getByRole('button', { name: 'Понятно' }).click();
+  await expect(page.locator('#petals')).toHaveText('4');
+  await page.getByRole('button', { name: 'Коллекция' }).click();
+  await page.locator('[data-tab="words"]').click();
+  await expect(page.locator('.word-chip')).toHaveText(['морковь']);
+  await shots(page, '18-words');
+});

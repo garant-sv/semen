@@ -1,10 +1,10 @@
 /* Service worker for «Зелёный сад». Generated at build time from src/sw/sw-template.js. */
-const VERSION = '47039e8589c4';
+const VERSION = 'd6c8a9194a84';
 const CACHE = 'green-garden-' + VERSION;
 const PRECACHE = [
   "./",
-  "./assets/index-B6aPlu2L.js",
-  "./assets/index-DhCsSJx4.css",
+  "./assets/index-B3JDSRIj.css",
+  "./assets/index-se720OhI.js",
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

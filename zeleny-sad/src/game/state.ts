@@ -32,9 +32,10 @@ import {
   type Stage,
 } from './data';
 import { FAIR_EVERY_MIN, FAIR_FROM_QUEST, FAIR_QUEUE, fairLevel } from './math';
+import { RUS_FROM_QUEST, RUS_REWARD, RUS_TRY_REWARD, WORDS, viewWord } from './russian';
 import { QUESTIONS, QUIZ_EVERY, QUIZ_FROM_QUEST, QUIZ_REWARD, QUIZ_TRY_REWARD, type Question } from './quiz';
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 export interface Plot {
   plant: PlantId | null;
@@ -44,6 +45,8 @@ export interface Plot {
   plantedAt: number | null;
   /** The seed will bloom into a golden flower (kept secret until it blooms). */
   golden: boolean;
+  /** A sign with a word to fill in (Russian); null — no sign. */
+  sign: { id: string; solved: boolean } | null;
 }
 
 export interface OrderItem {
@@ -105,6 +108,13 @@ export interface GameState {
     correct: number;
     asked: number;
   };
+  /** «Таблички у грядок»: Russian spelling. */
+  rus: {
+    /** Words filled in correctly (shown in the word list; asked less often). */
+    learned: string[];
+    correct: number;
+    total: number;
+  };
   /** «Ярмарка урожая»: customers with math problems. */
   fair: {
     /** Customers waiting at the stall. */
@@ -122,7 +132,7 @@ export interface GameState {
 }
 
 export function emptyPlot(): Plot {
-  return { plant: null, stage: 0, wateredAt: null, plantedAt: null, golden: false };
+  return { plant: null, stage: 0, wateredAt: null, plantedAt: null, golden: false, sign: null };
 }
 
 export function newGame(now: number): GameState {
@@ -147,6 +157,7 @@ export function newGame(now: number): GameState {
     badges: [],
     quiz: { pending: false, solved: [], correct: 0, asked: 0 },
     fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 },
+    rus: { learned: [], correct: 0, total: 0 },
     settings: { sound: true },
   };
 }
@@ -234,7 +245,8 @@ export function plantSeed(
     golden = s.stats.sinceGolden >= GOLDEN_PITY || rand() < GOLDEN_CHANCE;
     s.stats.sinceGolden = golden ? 0 : s.stats.sinceGolden + 1;
   }
-  s.plots[index] = { plant, stage: 0, wateredAt: null, plantedAt: now, golden };
+  const sign = rand && s.questIndex >= RUS_FROM_QUEST ? { id: pickWord(s, rand), solved: false } : null;
+  s.plots[index] = { plant, stage: 0, wateredAt: null, plantedAt: now, golden, sign };
   s.stats.planted[plant] = (s.stats.planted[plant] ?? 0) + 1;
   s.updatedAt = now;
   return { ok: true };
@@ -448,6 +460,41 @@ export function answerQuiz(s: GameState, id: string, answer: string, now: number
   s.petals += petals;
   s.updatedAt = now;
   return { ok: true, correct, petals };
+}
+
+// ---------------------------------------------------------------- signs (Russian)
+
+/** A word for a new sign: not yet learned and not on another sign, if possible. */
+export function pickWord(s: GameState, rand: () => number): string {
+  const busy = new Set(s.plots.map((p) => p.sign?.id).filter(Boolean));
+  const fresh = WORDS.filter((w) => !s.rus.learned.includes(w.id) && !busy.has(w.id));
+  const pool = fresh.length ? fresh : WORDS.filter((w) => !busy.has(w.id));
+  const list = pool.length ? pool : WORDS;
+  return list[Math.min(list.length - 1, Math.floor(rand() * list.length))].id;
+}
+
+export function answerSign(
+  s: GameState,
+  index: number,
+  option: string,
+  now: number,
+): Ok<{ correct: boolean; petals: number; answer: string }> | Fail {
+  const sign = s.plots[index]?.sign;
+  if (!sign || sign.solved) return fail('Здесь нет таблички.');
+  const w = WORDS.find((x) => x.id === sign.id);
+  if (!w) return fail('Табличка стёрлась.');
+  const { answer } = viewWord(w);
+  const correct = option === answer;
+  const petals = correct ? RUS_REWARD : RUS_TRY_REWARD;
+  sign.solved = true;
+  s.rus.total += 1;
+  if (correct) {
+    s.rus.correct += 1;
+    if (!s.rus.learned.includes(w.id)) s.rus.learned.push(w.id);
+  }
+  s.petals += petals;
+  s.updatedAt = now;
+  return { ok: true, correct, petals, answer };
 }
 
 // ---------------------------------------------------------------- fair

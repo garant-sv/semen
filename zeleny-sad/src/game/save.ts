@@ -4,6 +4,9 @@
 import { DECO_IDS, GUEST_IDS, LANDMARK_IDS, PLANT_IDS, PLOT_COUNT, QUESTS, SLOT_COUNT, TOTAL_PLOTS, type DecoId, type GuestId, type PlantId, type Stage } from './data';
 import { BADGE_IDS } from './badges';
 import { QUESTIONS } from './quiz';
+import { WORDS } from './russian';
+
+const WORD_IDS = WORDS.map((w) => w.id);
 import { SAVE_VERSION, emptyPlot, newGame, type GameState, type Order, type Plot } from './state';
 
 export const SAVE_KEY = 'green-garden/save';
@@ -62,7 +65,8 @@ type Raw = Record<string, unknown>;
  * v3 — garden guests, golden flowers (plot.golden, golden, stats.sinceGolden), orders.
  * v4 — vegetable patch (4 more plots, restored.veg), badges, Listik's questions (quiz, stats.sinceQuiz).
  * v5 — natural zones (tundra, taiga, steppe): 9 more plots, restored.<zone>.
- * v6 — current: «Ярмарка урожая» (fair: queue, lastAt, solved, firstTry).
+ * v6 — «Ярмарка урожая» (fair: queue, lastAt, solved, firstTry).
+ * v7 — current: «Таблички у грядок» (plot.sign, rus).
  */
 export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
   1: (raw) => {
@@ -116,6 +120,7 @@ export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
     return { ...raw, version: 5, restored: { ...restored, tundra: false, taiga: false, steppe: false } };
   },
   5: (raw) => ({ ...raw, version: 6, fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 } }),
+  6: (raw) => ({ ...raw, version: 7, rus: { learned: [], correct: 0, total: 0 } }),
 };
 
 export function migrate(raw: Raw): { data: Raw; from: number } {
@@ -179,6 +184,7 @@ export function sanitize(raw: Raw, now: number): GameState {
       wateredAt: wateredAt === null || Number.isNaN(wateredAt) ? null : wateredAt,
       plantedAt: p.plantedAt === null ? null : num(p.plantedAt, now),
       golden: p.golden === true,
+      sign: isObj(p.sign) && typeof p.sign.id === 'string' && WORD_IDS.includes(p.sign.id) ? { id: p.sign.id, solved: p.sign.solved === true } : null,
     };
   });
 
@@ -229,6 +235,12 @@ export function sanitize(raw: Raw, now: number): GameState {
   s.stats.sinceQuiz = Math.floor(num(stats.sinceQuiz, 0, 0, 1000));
 
   s.badges = Array.isArray(raw.badges) ? [...new Set(raw.badges.filter((b): b is string => BADGE_IDS.includes(b as string)))] : [];
+  const rus = isObj(raw.rus) ? raw.rus : {};
+  s.rus = {
+    learned: Array.isArray(rus.learned) ? [...new Set(rus.learned.filter((w): w is string => WORD_IDS.includes(w as string)))] : [],
+    correct: Math.floor(num(rus.correct, 0)),
+    total: Math.floor(num(rus.total, 0)),
+  };
   const fair = isObj(raw.fair) ? raw.fair : {};
   s.fair = {
     queue: Math.floor(num(fair.queue, 0, 0, 3)),

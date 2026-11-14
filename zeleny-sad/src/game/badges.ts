@@ -61,6 +61,7 @@ export const BADGES: Badge[] = [
     progress: (s) => count(DECO_IDS.filter((id) => s.decor.owned[id] > 0).length, DECO_IDS.length),
   },
   { id: 'counter', name: 'Счетовод', desc: 'Реши 20 задач на ярмарке', progress: (s) => count(s.fair.solved, 20) },
+  { id: 'speller', name: 'Грамотей', desc: 'Правильно заполни 30 табличек', progress: (s) => count(s.rus.correct, 30) },
   { id: 'scholar', name: 'Знаток природы', desc: 'Правильно ответь Листику 15 раз', progress: (s) => count(s.quiz.correct, 15) },
 ];
 
