@@ -596,6 +596,8 @@ button.card:active {
 .toggle input {
   width: 28px;
   height: 28px;
+  flex-shrink: 0;
+  margin-left: 12px;
   accent-color: var(--green);
   order: 2;
 }
@@ -2817,5 +2819,92 @@ button.card:active {
   .sheet-close,
   .answer-input {
     transition: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------ 0.8: large text
+   On for 2–3 class (or from the Menu). Only reading text grows; the layout stays the same. */
+.big-text .quest-title {
+  font-size: 15px;
+}
+
+.big-text .quest-body p,
+.big-text .goals li {
+  font-size: 19px;
+  line-height: 1.4;
+}
+
+.big-text .collapsed .goals li {
+  font-size: 17px;
+}
+
+.big-text .sheet p,
+.big-text .plain,
+.big-text .order-items li,
+.big-text .toggle {
+  font-size: 20px;
+  line-height: 1.45;
+}
+
+.big-text .sheet h2 {
+  font-size: 27px;
+}
+
+.big-text .bubble {
+  font-size: 21px;
+  line-height: 1.4;
+}
+
+.big-text .answer {
+  font-size: 21px;
+  min-height: 62px;
+}
+
+.big-text .btn {
+  font-size: 19px;
+}
+
+.big-text .explain,
+.big-text .explain b {
+  font-size: 20px;
+}
+
+.big-text .hint-box,
+.big-text .zone-card p {
+  font-size: 19px !important;
+}
+
+.big-text .small,
+.big-text .status {
+  font-size: 17px !important;
+}
+
+.big-text .card b {
+  font-size: 19px;
+}
+
+.big-text .card small,
+.big-text .card.book p,
+.big-text .badge-card small {
+  font-size: 16px;
+}
+
+.big-text .word-chip {
+  font-size: 17px;
+}
+
+.big-text .toast {
+  font-size: 19px;
+}
+
+/* Short phones: the quest card must not push the garden off the screen. */
+@media (max-height: 700px) {
+  .big-text .quest-body p,
+  .big-text .goals li {
+    font-size: 17px;
+    line-height: 1.35;
+  }
+  .big-text .toggle {
+    font-size: 18px;
   }
 }

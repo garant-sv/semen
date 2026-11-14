@@ -132,6 +132,8 @@ export interface GameState {
     sound: boolean;
     /** «Живое 2,5D»: the garden moves a little when the phone is tilted. */
     tilt: boolean;
+    /** Large text: null = by class (on for 2–3 class), or the player's own choice in the Menu. */
+    bigText: boolean | null;
   };
 }
 
@@ -163,7 +165,7 @@ export function newGame(now: number): GameState {
     fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 },
     rus: { learned: [], correct: 0, total: 0 },
     profile: { nick: '', grade: null },
-    settings: { sound: true, tilt: true },
+    settings: { sound: true, tilt: true, bigText: null },
   };
 }
 
@@ -446,6 +448,12 @@ export function checkQuiz(s: GameState): boolean {
 
 /** The class that sets the difficulty (4 until the player chooses). */
 export const gradeOf = (s: GameState): Grade => s.profile.grade ?? 4;
+
+/** 2–3 class: the gentler mode (large text, Listik reads aloud, tasks with pictures). */
+export const youngMode = (s: GameState): boolean => s.profile.grade !== null && s.profile.grade <= 3;
+
+/** Large text is on by class unless the player switched it in the Menu. */
+export const bigTextOn = (s: GameState): boolean => s.settings.bigText ?? youngMode(s);
 
 export function setProfile(s: GameState, nick: string, grade: Grade, now: number) {
   s.profile = { nick: cleanNick(nick), grade };

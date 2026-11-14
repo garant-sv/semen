@@ -532,10 +532,35 @@ test('«живое 2,5D»: far layers shift under the finger, beds stay put, til
   await shots(page, '20-depth');
 
   await page.locator('[data-nav="menu"]').click();
-  const tilt = page.getByLabel('Сад двигается, когда наклоняешь телефон');
+  const tilt = page.getByLabel('Наклон телефона двигает сад');
   await expect(tilt).toBeChecked();
   await tilt.uncheck();
   await page.reload();
   await page.locator('[data-nav="menu"]').click();
-  await expect(page.getByLabel('Сад двигается, когда наклоняешь телефон')).not.toBeChecked();
+  await expect(page.getByLabel('Наклон телефона двигает сад')).not.toBeChecked();
+});
+
+test('large text: on for 2 class, off for 4 class, switch in Menu, no sideways scroll', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-01T10:00:00') });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await expect(page.locator('#app')).toHaveClass(/big-text/);
+  const size = await page.locator('.quest-body p').first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(size).toBeGreaterThanOrEqual(17); // 19px, or 17px on short phones (normal text is 15px)
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  await shots(page, '21-big-text');
+
+  await page.getByRole('button', { name: 'Меню' }).click();
+  const box = page.getByLabel('Крупный текст');
+  await expect(box).toBeChecked();
+  await page.waitForTimeout(600);
+  await shots(page, '22-big-text-menu');
+  await box.uncheck();
+  await expect(page.locator('#app')).not.toHaveClass(/big-text/);
+  await page.getByRole('button', { name: /2 класс — изменить/ }).click();
+  await page.getByRole('button', { name: /^4\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Готово' }).click();
+  await expect(page.locator('#app')).not.toHaveClass(/big-text/);
 });

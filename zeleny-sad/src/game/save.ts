@@ -267,6 +267,7 @@ export function sanitize(raw: Raw, now: number): GameState {
   const settings = isObj(raw.settings) ? raw.settings : {};
   s.settings.sound = settings.sound !== false;
   s.settings.tilt = settings.tilt !== false;
+  s.settings.bigText = typeof settings.bigText === 'boolean' ? settings.bigText : null;
   return s;
 }
 

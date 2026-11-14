@@ -55,6 +55,7 @@ import {
   formatDuration,
   freeDecorations,
   gradeOf,
+  bigTextOn,
   setProfile,
   gardenProgress,
   goalDone,
@@ -357,6 +358,7 @@ export class App {
   private afterLoad(loaded: LoadResult) {
     setSoundEnabled(this.state.settings.sound);
     void this.startTilt(false);
+    this.applyTextSize();
     setTelemetryGrade(this.state.profile.grade);
     track('start', {
       st: loaded.status,
@@ -480,6 +482,7 @@ export class App {
     const now = this.now();
     const progress = gardenProgress(s);
     if (!this.flying) this.shownPetals = s.petals;
+    this.applyTextSize();
     $(this.root, '#petals').textContent = String(this.shownPetals);
     this.setLayer('brook', $(this.root, '#l-brook'), brookSVG(s.restored.pond));
     this.setLayer('board', $(this.root, '#l-board'), boardSVG(s));
@@ -1469,7 +1472,8 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const sheet = this.openSheet(`<h2>Меню</h2>${status}
 <div class="menu-list">
   <label class="toggle"><input type="checkbox" data-act="sound" ${s.settings.sound ? 'checked' : ''}><span>Звук</span></label>
-  <label class="toggle"><input type="checkbox" data-act="tilt" ${s.settings.tilt ? 'checked' : ''}><span>Сад двигается, когда наклоняешь телефон</span></label>
+  <label class="toggle"><input type="checkbox" data-act="bigtext" ${bigTextOn(s) ? 'checked' : ''}><span>Крупный текст</span></label>
+  <label class="toggle"><input type="checkbox" data-act="tilt" ${s.settings.tilt ? 'checked' : ''}><span>Наклон телефона двигает сад</span></label>
   <label class="toggle"><input type="checkbox" data-act="journal" ${telemetryEnabled() ? 'checked' : ''}><span>Помогать улучшать игру</span></label>
   <button type="button" class="btn wide primary" data-act="photo">Сфотографировать сад</button>
   <button type="button" class="btn wide" data-act="profile">${s.profile.nick ? `${esc(s.profile.nick)} · ` : ''}${gradeOf(s)} класс — изменить</button>
@@ -1482,6 +1486,12 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     $<HTMLInputElement>(sheet, '[data-act="sound"]').addEventListener('change', (e) => {
       this.state.settings.sound = (e.target as HTMLInputElement).checked;
       setSoundEnabled(this.state.settings.sound);
+      play('tap');
+      this.persist();
+    });
+    $<HTMLInputElement>(sheet, '[data-act="bigtext"]').addEventListener('change', (e) => {
+      this.state.settings.bigText = (e.target as HTMLInputElement).checked;
+      this.applyTextSize();
       play('tap');
       this.persist();
     });
@@ -1511,6 +1521,11 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       void this.takePhoto();
     });
     $(sheet, '[data-act="reset"]').addEventListener('click', () => this.confirmReset());
+  }
+
+  /** Large text for 2–3 class (or by the player's choice). */
+  private applyTextSize() {
+    this.root.classList.toggle('big-text', bigTextOn(this.state));
   }
 
   /**
@@ -1577,6 +1592,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       const nick = $<HTMLInputElement>(sheet, '[data-nick]').value;
       setProfile(this.state, nick, grade, this.now());
       setTelemetryGrade(grade);
+      this.applyTextSize();
       track('profile', { first, named: Boolean(this.state.profile.nick) });
       this.persist();
       this.closeSheet();
@@ -1658,6 +1674,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
         $(sheet, '[data-act="yes"]').addEventListener('click', () => {
           this.state = state;
           setSoundEnabled(state.settings.sound);
+          void this.startTilt(false);
           this.mode = 'garden';
           this.selectedDeco = null;
           this.closeSheet();
