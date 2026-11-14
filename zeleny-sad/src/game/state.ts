@@ -130,6 +130,8 @@ export interface GameState {
   };
   settings: {
     sound: boolean;
+    /** «Живое 2,5D»: the garden moves a little when the phone is tilted. */
+    tilt: boolean;
   };
 }
 
@@ -161,7 +163,7 @@ export function newGame(now: number): GameState {
     fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 },
     rus: { learned: [], correct: 0, total: 0 },
     profile: { nick: '', grade: null },
-    settings: { sound: true },
+    settings: { sound: true, tilt: true },
   };
 }
 

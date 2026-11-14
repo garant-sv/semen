@@ -516,3 +516,26 @@ test('profile: name and class are asked once and can be changed in the Menu', as
   expect(journal).toContain('"e":"profile"');
   expect(journal).not.toContain('Сёма');
 });
+
+test('«живое 2,5D»: far layers shift under the finger, beds stay put, tilt switch in Menu', async ({ page }) => {
+  await start(page);
+  const bed = await page.locator('[data-plot="0"]').boundingBox();
+  const far = page.locator('#view-garden [data-z="far"]');
+  const front = page.locator('#l-front');
+  await expect(front.locator('.grass').first()).toBeAttached();
+  const box = (await page.locator('#stage').boundingBox())!;
+  await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
+  await page.clock.runFor(2000);
+  await expect(far).toHaveAttribute('transform', /translate\(-\d/);
+  await expect(front).toHaveAttribute('transform', /translate\(\d/);
+  expect(await page.locator('[data-plot="0"]').boundingBox()).toEqual(bed);
+  await shots(page, '20-depth');
+
+  await page.locator('[data-nav="menu"]').click();
+  const tilt = page.getByLabel('Сад двигается, когда наклоняешь телефон');
+  await expect(tilt).toBeChecked();
+  await tilt.uncheck();
+  await page.reload();
+  await page.locator('[data-nav="menu"]').click();
+  await expect(page.getByLabel('Сад двигается, когда наклоняешь телефон')).not.toBeChecked();
+});

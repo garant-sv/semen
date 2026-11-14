@@ -137,6 +137,8 @@ describe('migrations', () => {
     expect(state.plots[0]).toEqual({ plant: 'tulip', stage: 2, wateredAt: T0, plantedAt: T0, golden: false, sign: null });
     expect(state.stats).toEqual({ planted: { daisy: 2 }, watered: 5, harvested: 2, sinceGolden: 0, sinceQuiz: 0 });
     expect(state.settings.sound).toBe(false);
+    // 0.8: old saves get the tilt parallax switched on.
+    expect(state.settings.tilt).toBe(true);
     expect(state).toMatchObject({ golden: {}, guests: {}, order: null, ordersDone: 0, petals: 12, questIndex: 3 });
     // v4: four vegetable beds, the patch is still overgrown.
     expect(state.plots).toHaveLength(19);

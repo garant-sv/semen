@@ -96,6 +96,7 @@ import {
   backSignSVG,
   backgroundSVG,
   boardSVG,
+  frontSVG,
   dayPhase,
   lightsSVG,
   plotPos,
@@ -121,6 +122,7 @@ import {
   wateringFx,
   wildSVG,
 } from './scene';
+import { Depth, requestTilt, tiltNeedsPermission } from './depth';
 import { play, setSoundEnabled } from './sound';
 
 export interface AppDeps {
@@ -225,6 +227,8 @@ export class App {
   private fairTask: { problem: MathProblem; guest: GuestId } | null = null;
   /** Short screens (iPhone SE): the quest card folds itself after the first tap in the garden. */
   private compact = window.innerHeight < 700;
+  /** «Живое 2,5D»: parallax of the scene layers. */
+  private depth!: Depth;
 
   constructor(
     private root: HTMLElement,
@@ -257,6 +261,7 @@ export class App {
     <g id="view-veg" style="display:none"><g id="v-bg">${vegBackgroundSVG()}</g><g id="v-sign">${backSignSVG()}</g><g id="v-objects"></g></g>
     ${ZONE_IDS.map((z) => `<g id="view-${z}" style="display:none"><g>${zoneBackgroundSVG(z)}</g><g>${zoneBackSignSVG()}</g><g id="${z}-objects"></g></g>`).join('')}
     <g id="l-guest"></g>
+    <g id="l-front" data-z="near"></g>
     <g id="l-sky"></g><g id="l-lights"></g><g id="l-fx"></g>
   </svg>
   <div class="mode-chip" id="modeChip" hidden></div>
@@ -301,6 +306,7 @@ export class App {
     if ('ResizeObserver' in window) new ResizeObserver(fit).observe(stage);
     window.addEventListener('resize', fit);
     fit();
+    this.depth = new Depth($(this.root, '#scene') as unknown as SVGSVGElement, stage, reducedMotion);
     this.root.querySelectorAll<HTMLButtonElement>('[data-nav]').forEach((b) =>
       b.addEventListener('click', () => this.onNav(b.dataset.nav!)),
     );
@@ -350,6 +356,7 @@ export class App {
 
   private afterLoad(loaded: LoadResult) {
     setSoundEnabled(this.state.settings.sound);
+    void this.startTilt(false);
     setTelemetryGrade(this.state.profile.grade);
     track('start', {
       st: loaded.status,
@@ -490,6 +497,7 @@ export class App {
     this.setLayer('wild', $(this.root, '#l-wild'), wildSVG(progress));
     this.setLayer('haze', $(this.root, '#l-haze'), hazeSVG(progress));
     this.setLayer('life', $(this.root, '#l-life'), lifeSVG(s));
+    this.setLayer('front', $(this.root, '#l-front'), frontSVG(this.view));
     for (let i = 0; i < TOTAL_PLOTS; i++) {
       this.setLayer(`plot-${i}`, this.wraps.get(`plot-${i}-main`)!, plotSVG(s, i, now));
       this.setLayer(`bar-${i}`, this.wraps.get(`plot-${i}-bar`)!, plotBarSVG(s, i, now));
@@ -1461,6 +1469,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const sheet = this.openSheet(`<h2>Меню</h2>${status}
 <div class="menu-list">
   <label class="toggle"><input type="checkbox" data-act="sound" ${s.settings.sound ? 'checked' : ''}><span>Звук</span></label>
+  <label class="toggle"><input type="checkbox" data-act="tilt" ${s.settings.tilt ? 'checked' : ''}><span>Сад двигается, когда наклоняешь телефон</span></label>
   <label class="toggle"><input type="checkbox" data-act="journal" ${telemetryEnabled() ? 'checked' : ''}><span>Помогать улучшать игру</span></label>
   <button type="button" class="btn wide primary" data-act="photo">Сфотографировать сад</button>
   <button type="button" class="btn wide" data-act="profile">${s.profile.nick ? `${esc(s.profile.nick)} · ` : ''}${gradeOf(s)} класс — изменить</button>
@@ -1475,6 +1484,15 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       setSoundEnabled(this.state.settings.sound);
       play('tap');
       this.persist();
+    });
+    $<HTMLInputElement>(sheet, '[data-act="tilt"]').addEventListener('change', (e) => {
+      const box = e.target as HTMLInputElement;
+      this.state.settings.tilt = box.checked;
+      play('tap');
+      this.persist();
+      void this.startTilt(true).then((ok) => {
+        if (box.checked && !ok) this.toast('Телефон не разрешил наклон. Сад всё равно двигается за пальцем.', 'warn');
+      });
     });
     $<HTMLInputElement>(sheet, '[data-act="journal"]').addEventListener('change', (e) => {
       setTelemetryEnabled((e.target as HTMLInputElement).checked);
@@ -1493,6 +1511,34 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       void this.takePhoto();
     });
     $(sheet, '[data-act="reset"]').addEventListener('click', () => this.confirmReset());
+  }
+
+  /**
+   * Turn the phone's tilt on or off for the parallax. On iPhone Safari asks for motion access,
+   * and only from a tap: then we ask on the first tap in the garden (or right away from the Menu).
+   */
+  private async startTilt(fromTap: boolean): Promise<boolean> {
+    if (!this.state.settings.tilt) {
+      this.depth.setTilt(false);
+      return false;
+    }
+    if (!tiltNeedsPermission()) {
+      this.depth.setTilt(true);
+      return true;
+    }
+    if (fromTap) {
+      const ok = await requestTilt();
+      this.depth.setTilt(ok);
+      return ok;
+    }
+    $(this.root, '#stage').addEventListener(
+      'click',
+      () => {
+        if (this.state.settings.tilt) void this.startTilt(true);
+      },
+      { once: true },
+    );
+    return false;
   }
 
   /** «Кто играет?» — nickname and class. Shown once at the start, then from the Menu. */
