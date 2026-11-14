@@ -516,3 +516,22 @@ test('profile: name and class are asked once and can be changed in the Menu', as
   expect(journal).toContain('"e":"profile"');
   expect(journal).not.toContain('Сёма');
 });
+
+test('young players (2nd class): pictures in the quest, read-aloud button, pointing finger', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-01T10:00:00') });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+  await noGuests(page);
+  await expect(page.locator('#app')).toHaveClass(/young/);
+  await expect(page.locator('.quest-card .goal-pic').first()).toBeVisible();
+  await expect(page.locator('.quest-card .say-btn')).toBeVisible();
+  await page.clock.runFor(7000);
+  await expect(page.locator('.hint-finger')).toHaveClass(/show/);
+  await shots(page, '21-young');
+  await page.locator('[data-plot="0"]').click();
+  await expect(page.locator('.hint-finger')).not.toHaveClass(/show/);
+  await expect(page.locator('.sheet .sheet-say')).toBeVisible();
+  await shots(page, '22-young-seeds');
+});

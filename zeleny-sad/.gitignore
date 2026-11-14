@@ -4,3 +4,7 @@ test-results/
 playwright-report/
 .DS_Store
 *.log
+pw.local.config.ts
+pw.mine.config.ts
+dist-mine
+test-results-mine

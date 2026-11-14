@@ -72,6 +72,8 @@ import {
   type GrowthChange,
 } from '../game/state';
 import { setTelemetryEnabled, setTelemetryGrade, telemetryEnabled, track } from '../telemetry';
+import { YOUNG_ICONS } from './icons-young';
+import { setVoiceOn, speak, stopSpeaking, voiceOn, voiceSupported } from './voice';
 import {
   exportSave,
   importSave,
@@ -351,6 +353,19 @@ export class App {
   private afterLoad(loaded: LoadResult) {
     setSoundEnabled(this.state.settings.sound);
     setTelemetryGrade(this.state.profile.grade);
+    this.applyAge();
+    this.root.addEventListener(
+      'click',
+      (e) => {
+        const btn = (e.target as Element).closest<HTMLElement>('[data-say]');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        speak(btn.dataset.say!.split('|'));
+      },
+      true,
+    );
+    this.root.addEventListener('pointerdown', () => this.hideHint(), { passive: true });
     track('start', {
       st: loaded.status,
       mig: loaded.status === 'ok' ? loaded.migratedFrom : null,
@@ -403,6 +418,7 @@ export class App {
     }
     this.render();
     this.tickGuests(now);
+    this.updateHint();
   }
 
   private commit() {
@@ -582,7 +598,7 @@ export class App {
       const goals = q.goals
         .map((g) => {
           const ok = goalDone(s, g);
-          return `<li class="${ok ? 'done' : ''}">${ok ? ICONS.check : ICONS.circle}<span>${this.goalLabel(g)}</span></li>`;
+          return `<li class="${ok ? 'done' : ''}">${ok ? ICONS.check : ICONS.circle}${this.young ? this.goalPicture(g) : ''}<span>${this.young ? this.goalShort(g) : this.goalLabel(g)}</span></li>`;
         })
         .join('');
       html = `<div class="quest-card${this.questCollapsed ? ' collapsed' : ''}">
@@ -592,6 +608,7 @@ export class App {
     ${this.questCollapsed ? '' : `<p>${q.text}</p>`}
     <ul class="goals">${goals}</ul>
   </div>
+  ${this.sayButton([q.title, q.text, ...q.goals.filter((g) => !goalDone(s, g)).map((g) => this.goalLabel(g))], 'Листик прочитает задание')}
   <button type="button" class="quest-toggle" data-quest-toggle aria-label="${this.questCollapsed ? 'Развернуть' : 'Свернуть'} задание">${this.questCollapsed ? '▾' : '▴'}</button>
 </div>`;
     } else {
@@ -603,6 +620,127 @@ export class App {
 </div>`;
     }
     this.setLayer('quest', $(this.root, '#quest'), html);
+  }
+
+  // ------------------------------------------------------------ younger players (2–3 класс)
+
+  /** Classes 2–3: big text, pictures in the quest card, Listik reads aloud, a pointing finger. */
+  private get young() {
+    return this.state.profile.grade !== null && gradeOf(this.state) <= 3;
+  }
+
+  private applyAge() {
+    this.root.classList.toggle('young', this.young);
+    this.root.dataset.grade = String(gradeOf(this.state));
+  }
+
+  /** A 🔊 button; the text is read by the phone's own voice. */
+  private sayButton(parts: string[], label = 'Прочитать вслух') {
+    if (!voiceSupported()) return '';
+    const text = parts.map((t) => t.replace(/<[^>]+>/g, ' ').replace(/[|"]/g, ' ')).join('|');
+    return `<button type="button" class="say-btn" data-say="${esc(text)}" aria-label="${label}">${YOUNG_ICONS.sound}</button>`;
+  }
+
+  /** Put a 🔊 button on an open sheet and, if the voice is on, read it at once. */
+  private voiceSheet(sheet: HTMLElement, parts: string[]) {
+    const html = this.sayButton(parts);
+    if (!html) return;
+    sheet.insertAdjacentHTML('afterbegin', html.replace('class="say-btn"', 'class="say-btn sheet-say"'));
+    if (voiceOn(gradeOf(this.state))) window.setTimeout(() => speak(parts), 250);
+  }
+
+  /** Read an answer/explanation if the voice is on. */
+  private sayIfOn(parts: string[]) {
+    if (voiceOn(gradeOf(this.state))) speak(parts);
+  }
+
+  private goalPicture(g: Goal): string {
+    const verb = (icon: string) => `<i class="goal-verb">${icon}</i>`;
+    switch (g.type) {
+      case 'plant':
+        return `<span class="goal-pic">${verb(YOUNG_ICONS.seed)}${plantIcon(g.plant, 3, 30)}</span>`;
+      case 'harvest':
+        return `<span class="goal-pic">${verb(YOUNG_ICONS.basket)}${plantIcon(g.plant, 3, 30)}</span>`;
+      case 'water':
+        return `<span class="goal-pic">${verb(YOUNG_ICONS.drop)}</span>`;
+      case 'meet':
+        return `<span class="goal-pic">${guestIcon(g.guest, 30)}</span>`;
+      case 'guests':
+        return `<span class="goal-pic">${guestIcon('hedgehog' as GuestId, 30)}</span>`;
+      case 'golden':
+        return `<span class="goal-pic">${verb(YOUNG_ICONS.basket)}${starIcon(26)}</span>`;
+      default:
+        return '';
+    }
+  }
+
+  /** Very short goal text for younger players (the picture says the rest). */
+  private goalShort(g: Goal): string {
+    const s = this.state;
+    switch (g.type) {
+      case 'plant':
+      case 'harvest':
+        return PLANTS[g.plant].name;
+      case 'water':
+        return 'Полей';
+      case 'meet':
+        return GUESTS[g.guest].name;
+      case 'guests':
+        return `${Math.min(g.count, Object.keys(s.guests).length)} из ${g.count}`;
+      case 'golden':
+        return 'Золотой цветок';
+      default:
+        return this.goalLabel(g);
+    }
+  }
+
+  /** Which bed should a younger player tap next? */
+  private hintTarget(): Element | null {
+    const s = this.state;
+    const q = currentQuest(s);
+    if (!q || this.view !== 'garden' || !$(this.root, '#sheetBackdrop').hidden) return null;
+    const now = this.now();
+    const beds = [0, 1, 2, 3, 4, 5];
+    const find = (want: string, plant?: PlantId) =>
+      beds.find((i) => plotStatus(s, i, now) === want && (!plant || s.plots[i].plant === plant));
+    for (const g of q.goals) {
+      if (goalDone(s, g)) continue;
+      let i: number | undefined;
+      if (g.type === 'plant') i = find('empty');
+      else if (g.type === 'water') i = find('thirsty');
+      else if (g.type === 'harvest') i = find('ready', g.plant) ?? find('thirsty', g.plant) ?? find('empty');
+      else i = find('ready') ?? find('thirsty');
+      if (i !== undefined) return this.root.querySelector(`[data-plot="${i}"]`);
+    }
+    return null;
+  }
+
+  private hintIdleSince = Date.now();
+  private hideHint() {
+    this.hintIdleSince = Date.now();
+    this.root.querySelector('.hint-finger')?.classList.remove('show');
+  }
+
+  /** After 5 s without a tap, a finger points at the bed to use next (2–3 класс, first quests). */
+  private updateHint() {
+    let finger = this.root.querySelector<HTMLElement>('.hint-finger');
+    const target = this.young && this.state.questIndex < 8 && Date.now() - this.hintIdleSince > 5000 ? this.hintTarget() : null;
+    if (!target) {
+      finger?.classList.remove('show');
+      return;
+    }
+    if (!finger) {
+      finger = document.createElement('div');
+      finger.className = 'hint-finger';
+      finger.setAttribute('aria-hidden', 'true');
+      finger.innerHTML = YOUNG_ICONS.finger;
+      this.root.appendChild(finger);
+    }
+    const r = target.getBoundingClientRect();
+    const host = this.root.getBoundingClientRect();
+    finger.style.left = `${r.left - host.left + r.width / 2}px`;
+    finger.style.top = `${r.top - host.top + r.height * 0.45}px`;
+    finger.classList.add('show');
   }
 
   private renderModeChip() {
@@ -818,6 +956,7 @@ export class App {
     const back = $(this.root, '#sheetBackdrop');
     if (back.hidden) return;
     back.hidden = true;
+    stopSpeaking();
     $(this.root, '#sheet').innerHTML = '';
     const cb = this.sheetOnClose;
     this.sheetOnClose = null;
@@ -837,7 +976,8 @@ export class App {
       return `<button type="button" class="card" data-plant="${id}">${plantIcon(id, 3, 64)}<b>${def.name}</b><small>${def.growMinutes} мин · +${def.petals}</small></button>`;
     }).join('');
     const title = { garden: 'Что посадим?', veg: 'Что посадим в огороде?', tundra: 'Что посадим в тундре?', taiga: 'Что посадим в тайге?', steppe: 'Что посадим в степи?' }[area];
-    const sheet = this.openSheet(`<h2>${title}</h2><p class="muted">Растение подрастает после каждого полива. Оно не завянет, даже если ты уйдёшь.</p><div class="grid">${cards}</div>`);
+    const sheet = this.openSheet(`<h2>${title}</h2><p class="muted young-hide">Растение подрастает после каждого полива. Оно не завянет, даже если ты уйдёшь.</p><div class="grid">${cards}</div>`);
+    this.voiceSheet(sheet, [title]);
     sheet.querySelectorAll<HTMLButtonElement>('[data-plant]').forEach((b) =>
       b.addEventListener('click', () => {
         const r = plantSeed(this.state, plot, b.dataset.plant as PlantId, this.now(), Math.random);
@@ -1065,7 +1205,8 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const options = [...q.options].sort(() => Math.random() - 0.5);
     const sheet = this.openSheet(`<div class="sheet-hero hero-hop">${listik(64, 'wow')}</div><p class="eyebrow">Вопрос Листика · ${q.topic}</p><h2>${q.text}</h2>
 <div class="answers">${options.map((o, i) => `<button type="button" class="btn wide answer" data-answer="${i}">${o}</button>`).join('')}</div>
-<p class="muted small center">Это из «Окружающего мира» за ${gradeOf(this.state)} класс. Ошибиться не страшно — Листик подскажет.</p>`);
+<p class="muted small center young-hide">Это из «Окружающего мира» за ${gradeOf(this.state)} класс. Ошибиться не страшно — Листик подскажет.</p>`);
+    this.voiceSheet(sheet, [q.text, `Варианты: ${options.join(', ')}`]);
     sheet.querySelectorAll<HTMLButtonElement>('[data-answer]').forEach((b) =>
       b.addEventListener('click', () => {
         const chosen = options[Number(b.dataset.answer)];
@@ -1085,6 +1226,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
         box.className = `explain ${r.correct ? 'ok' : 'try'}`;
         box.innerHTML = `<b>${r.correct ? `Верно! +${r.petals}` : `Почти! Правильный ответ: ${q.options[0]}. +${r.petals} за старание`}</b><p>${q.explain}</p><button type="button" class="btn primary wide" data-act="ok">${r.correct ? 'Ура!' : 'Понятно'}</button>`;
         $(sheet, '.answers').after(box);
+        this.sayIfOn([r.correct ? 'Верно!' : `Почти! Правильный ответ: ${q.options[0]}.`, q.explain]);
         $(box, '[data-act="ok"]').addEventListener('click', () => this.closeSheet());
         box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         this.commit();
@@ -1110,6 +1252,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
 <div class="word-sign"><span data-word>${escapeWord(v.masked)}</span></div>
 <div class="letters">${options.map((o, k) => `<button type="button" class="btn letter${o === NO_LETTER ? ' none' : ''}" data-opt="${k}">${o}</button>`).join('')}</div>
 <div data-result></div>`);
+    this.voiceSheet(sheet, ['Вставь пропущенную букву.', `Слово: ${v.full}`]);
     sheet.querySelectorAll<HTMLButtonElement>('[data-opt]').forEach((b) =>
       b.addEventListener('click', () => {
         const choice = options[Number(b.dataset.opt)];
@@ -1166,6 +1309,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
 </form>
 <div class="fair-buttons"><button type="button" class="btn ghost" data-act="hint">Подсказка</button><button type="button" class="btn primary" data-act="check">Проверить</button></div>
 <div data-result></div>`);
+    this.voiceSheet(sheet, [p.text]);
     const input = $<HTMLInputElement>(sheet, '.answer-input');
     const result = $(sheet, '[data-result]');
     const finish = (r: FairResult) => {
@@ -1183,6 +1327,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
           : r === 'first'
             ? `Верно! +${served.petals}`
             : `Верно, со второй попытки! +${served.petals}`;
+      this.sayIfOn([title.replace(/\+\d+.*$/, ''), `Решение: ${p.solution}`]);
       result.innerHTML = `<div class="explain ${r === 'failed' ? 'try' : 'ok'}"><b>${title}</b><p>Решение: ${p.solution}</p><button type="button" class="btn primary wide" data-act="next">${more ? 'Следующий покупатель' : 'Готово'}</button></div>`;
       play(r === 'failed' ? 'tap' : 'quest');
       if (r === 'first') this.confetti();
@@ -1199,6 +1344,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       box.className = 'hint-box';
       box.textContent = `${lead}${p.hint}`;
       result.replaceChildren(box);
+      this.sayIfOn([`${lead}${p.hint}`]);
     };
     const check = () => {
       if (done) return;
@@ -1449,6 +1595,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       quests.length > 1 ? () => window.setTimeout(() => this.showQuestDone(quests.slice(1)), 200) : undefined,
     );
     $(sheet, '[data-act="ok"]').addEventListener('click', () => this.closeSheet());
+    this.voiceSheet(sheet, [`Задание выполнено: ${q.title}.`, q.doneText]);
     this.questCollapsed = false;
     this.tipIndex++;
   }
@@ -1461,6 +1608,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const sheet = this.openSheet(`<h2>Меню</h2>${status}
 <div class="menu-list">
   <label class="toggle"><input type="checkbox" data-act="sound" ${s.settings.sound ? 'checked' : ''}><span>Звук</span></label>
+  ${voiceSupported() ? `<label class="toggle"><input type="checkbox" data-act="voice" ${voiceOn(gradeOf(s)) ? 'checked' : ''}><span>Листик читает вслух</span></label>` : ''}
   <label class="toggle"><input type="checkbox" data-act="journal" ${telemetryEnabled() ? 'checked' : ''}><span>Помогать улучшать игру</span></label>
   <button type="button" class="btn wide primary" data-act="photo">Сфотографировать сад</button>
   <button type="button" class="btn wide" data-act="profile">${s.profile.nick ? `${esc(s.profile.nick)} · ` : ''}${gradeOf(s)} класс — изменить</button>
@@ -1475,6 +1623,11 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       setSoundEnabled(this.state.settings.sound);
       play('tap');
       this.persist();
+    });
+    sheet.querySelector<HTMLInputElement>('[data-act="voice"]')?.addEventListener('change', (e) => {
+      const on = (e.target as HTMLInputElement).checked;
+      setVoiceOn(on);
+      if (on) speak('Привет! Теперь я буду читать вслух.');
     });
     $<HTMLInputElement>(sheet, '[data-act="journal"]').addEventListener('change', (e) => {
       setTelemetryEnabled((e.target as HTMLInputElement).checked);
@@ -1531,6 +1684,8 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       const nick = $<HTMLInputElement>(sheet, '[data-nick]').value;
       setProfile(this.state, nick, grade, this.now());
       setTelemetryGrade(grade);
+      this.applyAge();
+      this.render();
       track('profile', { first, named: Boolean(this.state.profile.nick) });
       this.persist();
       this.closeSheet();

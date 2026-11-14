@@ -2772,3 +2772,57 @@ button.card:active {
     transition: none !important;
   }
 }
+
+/* ---------- v0.8: младшие классы (2–3): крупно, картинками, Листик читает вслух ---------- */
+.say-btn {
+  display: inline-grid; place-items: center;
+  width: 44px; height: 44px; padding: 0;
+  border-radius: 50%; border: 2px solid #cfe6bf;
+  background: #f1f9ea; color: #437f3c; font-size: 22px; cursor: pointer;
+  box-shadow: 0 2px 0 #cfe6bf;
+}
+.say-btn:active { transform: scale(.92); }
+.say-btn:focus-visible { outline: 3px solid #8cc56f; outline-offset: 2px; }
+.quest-card .say-btn { position: absolute; top: 4px; right: 48px; width: 40px; height: 40px; font-size: 20px; }
+.quest-card:has(.say-btn) { padding-right: 92px; }
+.sheet .sheet-say { position: absolute; top: 12px; right: 66px; z-index: 2; }
+.sheet:has(.sheet-say) > .eyebrow:first-of-type,
+.sheet:has(.sheet-say) > h2:first-of-type { margin-right: 108px !important; }
+.goal-pic { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.goals li .goal-pic svg { width: 30px; height: 30px; color: inherit; }
+.goals li .goal-verb svg { width: 24px; height: 24px; }
+.goal-verb { display: inline-grid; place-items: center; font-style: normal; }
+
+.young .quest-body p,
+.young .young-hide { display: none; }
+.young .quest-title { font-size: 15px; }
+.young .goals li { font-size: 18px; gap: 8px; }
+.young .goals li > svg:first-child { width: 24px; height: 24px; }
+.young .sheet { font-size: 19px; }
+.young .sheet h2 { font-size: 26px; line-height: 1.2; }
+.young .sheet .eyebrow { font-size: 13px; }
+.young .sheet .answer { font-size: 21px; min-height: 60px; }
+.young .sheet .bubble { font-size: 21px; line-height: 1.35; }
+.young .sheet .letter { font-size: 30px; min-width: 72px; min-height: 72px; }
+.young .sheet .explain p, .young .sheet .hint-box { font-size: 18px; }
+.young .toast { font-size: 19px; }
+.young .card b { font-size: 17px; }
+
+.hint-finger {
+  position: absolute; z-index: 30; width: 52px; height: 58px;
+  margin-left: -14px; pointer-events: none;
+  opacity: 0; transition: opacity .3s ease;
+  filter: drop-shadow(0 3px 3px rgba(60, 40, 20, .3));
+}
+.hint-finger svg { width: 100%; height: 100%; }
+.hint-finger.show { opacity: 1; animation: finger-tap 1.2s ease-in-out infinite; }
+@keyframes finger-tap {
+  0%, 100% { transform: translateY(10px); }
+  45% { transform: translateY(0); }
+  55% { transform: translateY(0) scale(.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hint-finger.show { animation: none; }
+}
+/* Узкие телефоны (320px): карточки по две в ряд, а не по одной. */
+.grid { grid-template-columns: repeat(auto-fill, minmax(min(130px, 44%), 1fr)); }
