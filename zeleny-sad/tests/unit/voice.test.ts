@@ -12,6 +12,11 @@ describe('0.8: Listik reads aloud', () => {
     expect(pickVoice([])).toBeNull();
   });
 
+  it('among the voices on the phone, takes the more natural one', () => {
+    expect(pickVoice([v('Milena', 'ru-RU', true, true), v('Milena (Enhanced)', 'ru-RU', true)])?.name).toBe('Milena (Enhanced)');
+    expect(pickVoice([v('Google русский', 'ru-RU', false), v('Milena', 'ru-RU', true)])?.name).toBe('Milena');
+  });
+
   it('speaks plain text: no tags, math signs as words, ranges untouched', () => {
     expect(speechText('<b>Верно!</b> 7 × 8 = 56')).toBe('Верно! 7 умножить на 8 равно 56');
     expect(speechText('Решение: 100 − 35 = 65')).toBe('Решение: 100 минус 35 равно 65');

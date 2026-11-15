@@ -433,8 +433,8 @@ export const QUESTIONS: Question[] = [
   },
 ];
 
-export const QUIZ_EVERY = 3;
-export const QUIZ_FROM_QUEST = 3;
+export const QUIZ_EVERY = 2;
+export const QUIZ_FROM_QUEST = 2;
 export const QUIZ_REWARD = 5;
 export const QUIZ_TRY_REWARD = 1;
 

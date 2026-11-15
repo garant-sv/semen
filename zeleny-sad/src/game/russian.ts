@@ -176,7 +176,7 @@ export function viewWord(w: WordTask): WordView {
   return { masked, full, answer: last[1] === '' ? NO_LETTER : last[1] };
 }
 
-export const RUS_FROM_QUEST = 4;
+export const RUS_FROM_QUEST = 3;
 export const RUS_REWARD = 3;
 export const RUS_TRY_REWARD = 1;
 

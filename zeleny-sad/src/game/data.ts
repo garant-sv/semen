@@ -83,8 +83,11 @@ export const STAGE_NAMES: Record<Stage, string> = {
 export interface PlantDef {
   id: PlantId;
   name: string;
-  /** Total growing time in minutes (split equally between the three watered stages). */
-  growMinutes: number;
+  /**
+   * Total growing time in seconds (split equally between the three watered stages).
+   * Divisible by 3, so a stage lasts whole seconds. Seconds, not minutes: children play one sitting of 5–15 minutes and must not wait.
+   */
+  growSeconds: number;
   /** Petals received when the bloom is collected. */
   petals: number;
   fact: string;
@@ -95,42 +98,42 @@ export const PLANTS: Record<PlantId, PlantDef> = {
   daisy: {
     id: 'daisy',
     name: 'Ромашка',
-    growMinutes: 3,
+    growSeconds: 15,
     petals: 3,
     fact: 'Жёлтая серединка ромашки — это сотни крошечных цветков, собранных в одну корзинку.',
   },
   sunflower: {
     id: 'sunflower',
     name: 'Подсолнух',
-    growMinutes: 6,
+    growSeconds: 24,
     petals: 5,
     fact: 'Молодой подсолнух поворачивает головку вслед за солнцем, а взрослый обычно смотрит на восток.',
   },
   bellflower: {
     id: 'bellflower',
     name: 'Колокольчик',
-    growMinutes: 9,
+    growSeconds: 36,
     petals: 7,
     fact: 'Цветки колокольчика смотрят вниз, как маленькие колокола, — так дождь не смывает пыльцу.',
   },
   tulip: {
     id: 'tulip',
     name: 'Тюльпан',
-    growMinutes: 12,
+    growSeconds: 45,
     petals: 9,
     fact: 'Тюльпаны продолжают немного расти даже в вазе, уже после того, как их срезали.',
   },
   lavender: {
     id: 'lavender',
     name: 'Лаванда',
-    growMinutes: 18,
+    growSeconds: 60,
     petals: 12,
     fact: 'Лаванду очень любят пчёлы и бабочки, а засушенные цветки пахнут ещё долгие месяцы.',
   },
   moonflower: {
     id: 'moonflower',
     name: 'Лунный цветок',
-    growMinutes: 30,
+    growSeconds: 90,
     petals: 20,
     magic: true,
     fact: 'Волшебный цветок этого сада. Его настоящий родственник, луноцвет, раскрывается вечером и пахнет ночью.',
@@ -138,84 +141,84 @@ export const PLANTS: Record<PlantId, PlantDef> = {
   carrot: {
     id: 'carrot',
     name: 'Морковка',
-    growMinutes: 4,
+    growSeconds: 21,
     petals: 4,
     fact: 'Морковка — корнеплод: мы едим её корень, в котором растение запасает питательные вещества на зиму.',
   },
   strawberry: {
     id: 'strawberry',
     name: 'Клубника',
-    growMinutes: 8,
+    growSeconds: 30,
     petals: 7,
     fact: 'Маленькие «семечки» на клубнике — это и есть настоящие плоды-орешки, а сладкая мякоть — разросшаяся серединка цветка.',
   },
   pumpkin: {
     id: 'pumpkin',
     name: 'Тыква',
-    growMinutes: 20,
+    growSeconds: 60,
     petals: 15,
     fact: 'Тыква растёт на длинной плети. Самые большие тыквы на конкурсах весят больше тонны — как маленький автомобиль!',
   },
   cloudberry: {
     id: 'cloudberry',
     name: 'Морошка',
-    growMinutes: 6,
+    growSeconds: 24,
     petals: 6,
     fact: 'Морошка растёт на болотах тундры. Ягода сначала красная, а когда созреет — становится янтарно-жёлтой.',
   },
   dwarfbirch: {
     id: 'dwarfbirch',
     name: 'Карликовая берёза',
-    growMinutes: 9,
+    growSeconds: 36,
     petals: 8,
     fact: 'В тундре берёзка растёт всего по колено и стелется по земле — так ей легче пережить холод и ветер.',
   },
   lichen: {
     id: 'lichen',
     name: 'Ягель',
-    growMinutes: 14,
+    growSeconds: 51,
     petals: 12,
     fact: 'Ягель — это лишайник, а не мох. Он растёт всего на несколько миллиметров в год, а зимой его едят северные олени.',
   },
   lingonberry: {
     id: 'lingonberry',
     name: 'Брусника',
-    growMinutes: 7,
+    growSeconds: 30,
     petals: 7,
     fact: 'Брусника — вечнозелёный кустик: её кожистые листья зимуют зелёными прямо под снегом.',
   },
   cedar: {
     id: 'cedar',
     name: 'Кедр',
-    growMinutes: 16,
+    growSeconds: 51,
     petals: 14,
     fact: 'Сибирскую кедровую сосну все зовут кедром. Её шишки с орешками созревают больше года.',
   },
   blueberry: {
     id: 'blueberry',
     name: 'Черника',
-    growMinutes: 9,
+    growSeconds: 36,
     petals: 9,
     fact: 'Черника любит тень хвойного леса. От её ягод синеют язык и губы!',
   },
   feathergrass: {
     id: 'feathergrass',
     name: 'Ковыль',
-    growMinutes: 7,
+    growSeconds: 30,
     petals: 7,
     fact: 'Ковыль — главная трава степи. Его семена с пушистыми «пёрышками» ветер уносит далеко-далеко.',
   },
   steppetulip: {
     id: 'steppetulip',
     name: 'Тюльпан Шренка',
-    growMinutes: 12,
+    growSeconds: 45,
     petals: 12,
     fact: 'Дикий степной тюльпан цветёт весной всего несколько недель. Он редкий и занесён в Красную книгу России.',
   },
   wormwood: {
     id: 'wormwood',
     name: 'Полынь',
-    growMinutes: 8,
+    growSeconds: 30,
     petals: 8,
     fact: 'Серебристый пушок на листьях полыни защищает её от жаркого солнца и помогает беречь воду.',
   },
