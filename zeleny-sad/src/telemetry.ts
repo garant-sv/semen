@@ -106,6 +106,19 @@ export function track(e: string, data: EventData = {}) {
   }
 }
 
+const questsLogged = new Set<string>();
+
+/**
+ * Record a finished quest once per page session. The quest sheet may be re-shown after another
+ * sheet closes; without this guard the same quest landed in the journal twice.
+ */
+export function trackQuest(id: string, n: number): boolean {
+  if (questsLogged.has(id)) return false;
+  questsLogged.add(id);
+  track('quest', { id, n });
+  return true;
+}
+
 function schedule(ms: number) {
   if (!live() || timer) return;
   timer = window.setTimeout(() => {

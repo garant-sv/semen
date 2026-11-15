@@ -75,7 +75,7 @@ import {
   type GameState,
   type GrowthChange,
 } from '../game/state';
-import { setTelemetryEnabled, setTelemetryGrade, telemetryEnabled, track } from '../telemetry';
+import { setTelemetryEnabled, setTelemetryGrade, telemetryEnabled, track, trackQuest } from '../telemetry';
 import {
   exportSave,
   importSave,
@@ -1473,7 +1473,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   }
 
   private showQuestDone(quests: Quest[]) {
-    if (quests[0]) track('quest', { id: quests[0].id, n: this.state.questIndex });
+    if (quests[0]) trackQuest(quests[0].id, QUESTS.indexOf(quests[0]) + 1 || this.state.questIndex);
     const back = $(this.root, '#sheetBackdrop');
     if (!back.hidden) {
       // Wait until the current sheet is closed.
