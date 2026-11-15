@@ -32,7 +32,7 @@ import {
   type Quest,
   type Stage,
 } from './data';
-import { FAIR_EVERY_MIN, FAIR_FROM_QUEST, FAIR_QUEUE, fairLevel } from './math';
+import { FAIR_EVERY_SEC, FAIR_FROM_QUEST, FAIR_QUEUE, fairLevel } from './math';
 import { RUS_FROM_QUEST, RUS_REWARD, RUS_TRY_REWARD, WORDS, viewWord, wordsForGrade } from './russian';
 import { QUESTIONS, QUIZ_EVERY, QUIZ_FROM_QUEST, QUIZ_REWARD, QUIZ_TRY_REWARD, questionGrades, type Grade, type Question } from './quiz';
 
@@ -175,7 +175,7 @@ export function newGame(now: number): GameState {
 // ---------------------------------------------------------------- growth
 
 export function stageDurationMs(plant: PlantId): number {
-  return (PLANTS[plant].growMinutes * 60_000) / 3;
+  return Math.round((PLANTS[plant].growSeconds * 1000) / 3);
 }
 
 export type PlotStatus = 'locked' | 'empty' | 'thirsty' | 'growing' | 'ready';
@@ -410,7 +410,7 @@ export function newOrder(s: GameState, rand: () => number): Order {
   const chosen: PlantId[] = [];
   for (let k = 0; k < kinds; k++) chosen.push(pick(plants.filter((p) => !chosen.includes(p))));
   const items = chosen.map((plant) => {
-    const max = PLANTS[plant].growMinutes <= 6 ? 3 : PLANTS[plant].growMinutes <= 12 ? 2 : 1;
+    const max = PLANTS[plant].growSeconds <= 24 ? 3 : PLANTS[plant].growSeconds <= 45 ? 2 : 1;
     return { plant, need: Math.max(1, Math.ceil(rand() * (kinds === 2 ? Math.min(2, max) : max))), have: 0 };
   });
   const value = items.reduce((sum, it) => sum + PLANTS[it.plant].petals * it.need, 0);
@@ -550,7 +550,7 @@ export function fairAvailable(s: GameState): boolean {
 }
 
 /**
- * Bring the customer queue up to date: a new customer every few minutes, at most a few waiting.
+ * Bring the customer queue up to date: a new customer every FAIR_EVERY_SEC seconds, at most a few waiting.
  * Returns true when the fair has just opened.
  */
 export function advanceFair(s: GameState, now: number): boolean {
@@ -562,7 +562,7 @@ export function advanceFair(s: GameState, now: number): boolean {
     return true;
   }
   if (now < f.lastAt) f.lastAt = now; // the device clock went back
-  const step = FAIR_EVERY_MIN * 60_000;
+  const step = FAIR_EVERY_SEC * 1000;
   const added = Math.floor((now - f.lastAt) / step);
   if (f.queue >= FAIR_QUEUE) {
     f.lastAt = now;
@@ -573,10 +573,10 @@ export function advanceFair(s: GameState, now: number): boolean {
   return false;
 }
 
-/** Minutes until the next customer comes (0 if the stall is full). */
+/** Milliseconds until the next customer comes (0 if the stall is full). */
 export function nextCustomerIn(s: GameState, now: number): number {
   if (s.fair.queue >= FAIR_QUEUE || !s.fair.lastAt) return 0;
-  return Math.max(1, Math.ceil((s.fair.lastAt + FAIR_EVERY_MIN * 60_000 - now) / 60_000));
+  return Math.max(1000, s.fair.lastAt + FAIR_EVERY_SEC * 1000 - now);
 }
 
 export type FairResult = 'first' | 'second' | 'failed';

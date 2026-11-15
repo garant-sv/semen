@@ -307,7 +307,7 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
   }
 }
 
-/** Minutes between new customers; at most FAIR_QUEUE wait at the stall. */
-export const FAIR_EVERY_MIN = 8;
+/** Seconds between new customers; at most FAIR_QUEUE wait at the stall. */
+export const FAIR_EVERY_SEC = 45;
 export const FAIR_QUEUE = 3;
-export const FAIR_FROM_QUEST = 3;
+export const FAIR_FROM_QUEST = 2;

@@ -569,7 +569,9 @@ test('Listik reads aloud: on for 2 class, button reads the quest, switch in Menu
   // The test browser has no voices; record what would be spoken instead.
   await page.addInitScript(() => {
     const said: string[] = [];
+    const how: string[] = [];
     (window as unknown as { __said: string[] }).__said = said;
+    (window as unknown as { __how: string[] }).__how = how;
     class FakeUtterance {
       lang = '';
       rate = 1;
@@ -588,7 +590,10 @@ test('Listik reads aloud: on for 2 class, button reads the quest, switch in Menu
         speaking: false,
         pending: false,
         getVoices: () => [{ name: 'Milena', lang: 'ru-RU', localService: true, default: true }],
-        speak: (u: FakeUtterance) => said.push(u.text),
+        speak: (u: FakeUtterance) => {
+          said.push(u.text);
+          how.push(`${u.rate}/${u.pitch}`);
+        },
         cancel: () => undefined,
       },
     });
@@ -616,7 +621,11 @@ test('Listik reads aloud: on for 2 class, button reads the quest, switch in Menu
   await page.locator('#listikBtn').click();
   await expect(page.locator('#sheet h2 .speak')).toBeVisible();
   const said2 = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
-  expect(said2.at(-1)).toContain('Варианты ответа');
+  expect(said2.at(-1)).not.toContain('Варианты ответа');
+  expect(said2.at(-1)).toMatch(/\?$/);
+  // 2 class: normal speed and natural pitch (slow and high sounded robotic to the children).
+  const how = await page.evaluate(() => (window as unknown as { __how: string[] }).__how);
+  expect(how.at(-1)).toBe('1/1');
   await shots(page, '24-voice-quiz');
   await page.locator('.sheet-close').click();
 

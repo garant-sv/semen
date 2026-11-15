@@ -873,7 +873,7 @@ export class App {
       if (!open) {
         return `<div class="card locked" aria-disabled="true">${plantIcon(id, 3, 64, true)}<b>???</b><small>Скоро</small></div>`;
       }
-      return `<button type="button" class="card" data-plant="${id}">${plantIcon(id, 3, 64)}<b>${def.name}</b><small>${def.growMinutes} мин · +${def.petals}</small></button>`;
+      return `<button type="button" class="card" data-plant="${id}">${plantIcon(id, 3, 64)}<b>${def.name}</b><small>${def.growSeconds} с · +${def.petals}</small></button>`;
     }).join('');
     const title = { garden: 'Что посадим?', veg: 'Что посадим в огороде?', tundra: 'Что посадим в тундре?', taiga: 'Что посадим в тайге?', steppe: 'Что посадим в степи?' }[area];
     const sheet = this.openSheet(`<h2>${title}</h2><p class="muted">Растение подрастает после каждого полива. Оно не завянет, даже если ты уйдёшь.</p><div class="grid">${cards}</div>`);
@@ -1102,7 +1102,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const q = this.question;
     play('tap');
     const options = [...q.options].sort(() => Math.random() - 0.5);
-    const spoken = `${q.text} Варианты ответа: ${options.join('. ')}.`;
+    const spoken = `${q.text} ${options.join('? ')}?`;
     // 2–3 class: options with pictures where the question has them.
     const pics = youngMode(s) && q.pics ? q.pics : null;
     const sheet = this.openSheet(`<div class="sheet-hero hero-hop">${listik(64, 'wow')}</div><p class="eyebrow">Вопрос Листика · ${q.topic}</p><h2>${q.text}${this.speakBtn(spoken)}</h2>
@@ -1195,7 +1195,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     play('tap');
     const level = fairLevel(s.fair.solved, gradeOf(s));
     if (s.fair.queue <= 0) {
-      this.openSheet(`<div class="sheet-hero">${listik(64)}</div><p class="eyebrow">Ярмарка урожая · уровень ${level}</p><h2>Покупателей пока нет</h2><p>Следующий придёт примерно через ${nextCustomerIn(s, now)} мин. А пока можно поливать и собирать урожай!</p><p class="muted">Решено задач: ${s.fair.solved}, с первой попытки: ${s.fair.firstTry}.</p>`);
+      this.openSheet(`<div class="sheet-hero">${listik(64)}</div><p class="eyebrow">Ярмарка урожая · уровень ${level}</p><h2>Покупателей пока нет</h2><p>Следующий придёт через ${Math.ceil(nextCustomerIn(s, now) / 1000)} с. А пока можно поливать и собирать урожай!</p><p class="muted">Решено задач: ${s.fair.solved}, с первой попытки: ${s.fair.firstTry}.</p>`);
       return;
     }
     if (!this.fairTask) {

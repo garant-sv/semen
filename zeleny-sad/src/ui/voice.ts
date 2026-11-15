@@ -11,11 +11,17 @@ export function voiceSupported(): boolean {
   return synth() !== null;
 }
 
+/** Names of the more natural voices: Apple «Enhanced/Premium», Microsoft «Natural», Android/Chrome «Google». */
+const BETTER_VOICE = /enhanced|premium|улучш|natural|neural|google/i;
+
 /** Best Russian voice: on the device first, then any Russian one. null if the list is empty or has none. */
 export function pickVoice(voices: Pick<SpeechSynthesisVoice, 'lang' | 'localService' | 'default' | 'name'>[]) {
   const ru = voices.filter((v) => v.lang.replace('_', '-').toLowerCase().startsWith('ru'));
   if (!ru.length) return null;
-  const score = (v: (typeof ru)[number]) => (v.localService ? 2 : 0) + (v.default ? 1 : 0);
+  // On the device first (works offline, the text never leaves the phone); among those,
+  // voices whose name says they are the better quality ones.
+  const score = (v: (typeof ru)[number]) =>
+    (v.localService ? 4 : 0) + (BETTER_VOICE.test(v.name) ? 2 : 0) + (v.default ? 1 : 0);
   return [...ru].sort((a, b) => score(b) - score(a))[0];
 }
 
@@ -65,8 +71,10 @@ export function say(html: string, slow = false): boolean {
   u.lang = 'ru-RU';
   const v = pickVoice(s.getVoices());
   if (v) u.voice = v as SpeechSynthesisVoice;
-  u.rate = slow ? 0.85 : 0.95;
-  u.pitch = 1.1;
+  // Normal speed and natural pitch: slowing down and raising the pitch is what made
+  // the phone voice sound robotic and drawn-out to the children (test of 14.11.2026).
+  u.rate = slow ? 1 : 1.1;
+  u.pitch = 1;
   current = u; // keep a reference: Safari may drop an utterance that is garbage-collected
   u.onend = () => {
     if (current === u) current = null;

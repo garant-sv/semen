@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FAIR_EVERY_MIN, FAIR_QUEUE, KINDS_BY_LEVEL, fairLevel, makeProblem, plural, type MathKind } from '../../src/game/math';
+import { FAIR_EVERY_SEC, FAIR_QUEUE, KINDS_BY_LEVEL, fairLevel, makeProblem, plural, type MathKind } from '../../src/game/math';
 import { advanceFair, newGame, nextCustomerIn, serveCustomer } from '../../src/game/state';
 import { parseSave } from '../../src/game/save';
 
@@ -87,10 +87,10 @@ describe('fair queue', () => {
     s.questIndex = 3;
     expect(advanceFair(s, T0)).toBe(true);
     expect(s.fair.queue).toBe(1);
-    const step = FAIR_EVERY_MIN * 60_000;
+    const step = FAIR_EVERY_SEC * 1000;
     advanceFair(s, T0 + step + 1);
     expect(s.fair.queue).toBe(2);
-    expect(nextCustomerIn(s, T0 + step + 1)).toBe(FAIR_EVERY_MIN);
+    expect(nextCustomerIn(s, T0 + step + 1)).toBe(step - 1);
     advanceFair(s, T0 + 50 * step);
     expect(s.fair.queue).toBe(FAIR_QUEUE);
     expect(serveCustomer(s, 'first', T0 + 50 * step)).toMatchObject({ ok: true, petals: 4, level: 1 });
