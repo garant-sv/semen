@@ -1,6 +1,10 @@
-// Листик читает вслух: the phone's own speech engine (Web Speech API), no internet and no
-// third-party services. A voice that lives on the device (localService) is preferred,
-// so it keeps working offline; iPhone and most Android phones have a Russian one built in.
+// Листик читает вслух. First choice: the recorded voice (public/voice, made in advance with a
+// neural speech model, see voice/README.md), played from the game's own files, so it works
+// offline once downloaded. If the recording is not downloaded yet or a sentence was not
+// recorded, the phone's own speech engine (Web Speech API) reads the whole text instead.
+// A voice that lives on the device (localService) is preferred there, so it also works offline.
+
+import { recordedSupported, sayRecorded, stopRecorded } from './voice-pack';
 
 const synth = (): SpeechSynthesis | null =>
   typeof window !== 'undefined' && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined'
@@ -8,7 +12,7 @@ const synth = (): SpeechSynthesis | null =>
     : null;
 
 export function voiceSupported(): boolean {
-  return synth() !== null;
+  return synth() !== null || recordedSupported();
 }
 
 /** Names of the more natural voices: Apple «Enhanced/Premium», Microsoft «Natural», Android/Chrome «Google». */
@@ -30,6 +34,7 @@ export function pickVoice(voices: Pick<SpeechSynthesisVoice, 'lang' | 'localServ
  * (Some browsers list voices late, so an empty list means «don't know yet».)
  */
 export function russianVoiceMissing(): boolean {
+  if (recordedSupported()) return false;
   const s = synth();
   if (!s) return true;
   const list = s.getVoices();
@@ -45,6 +50,9 @@ export function speechText(html: string): string {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
+    .replace(/\s*\(ост\.\s*(\d+)\)/g, ', остаток $1')
+    // Quest progress «Починить мостик (5/15 лепестков)» → «Починить мостик: 5 из 15 лепестков».
+    .replace(/\s*\((\d+)\/(\d+) лепестков\)/g, ': $1 из $2 лепестков')
     .replace(/\s*×\s*/g, ' умножить на ')
     .replace(/\s*÷\s*/g, ' разделить на ')
     .replace(/(\d) : (?=\d)/g, '$1 разделить на ')
@@ -62,11 +70,12 @@ let current: SpeechSynthesisUtterance | null = null;
 
 /** Read the text aloud (stops anything already being read). Returns false if there is no speech engine. */
 export function say(html: string, slow = false): boolean {
-  const s = synth();
-  if (!s) return false;
   const text = speechText(html);
   if (!text) return false;
-  s.cancel();
+  stopSpeaking();
+  if (sayRecorded(text)) return true;
+  const s = synth();
+  if (!s) return false;
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'ru-RU';
   const v = pickVoice(s.getVoices());
@@ -84,6 +93,7 @@ export function say(html: string, slow = false): boolean {
 }
 
 export function stopSpeaking() {
+  stopRecorded();
   const s = synth();
   if (s && (s.speaking || s.pending)) s.cancel();
   current = null;

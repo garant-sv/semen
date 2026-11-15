@@ -26,9 +26,16 @@ function serviceWorker(): Plugin {
         hash.update(item.type === 'chunk' ? item.code : item.source);
       }
       const publicDir = join(process.cwd(), 'public');
+      const voicePacks: string[] = [];
       for (const p of listFiles(publicDir)) {
         const rel = relative(publicDir, p).split('\\').join('/');
         if (rel.startsWith('.')) continue;
+        // The voice recording is big and has its own cache (see sw-template.js): not precached
+        // with the game. Their names hold their content hash, and voice.json (precached) names them.
+        if (/^voice\/pack-[\w-]+\.txt$/.test(rel)) {
+          voicePacks.push(rel.slice('voice/'.length));
+          continue;
+        }
         files.push(rel);
         hash.update(rel);
         hash.update(readFileSync(p));
@@ -36,7 +43,7 @@ function serviceWorker(): Plugin {
       const precache = ['./', ...files.sort().map((f) => `./${f}`)];
       const version = hash.digest('hex').slice(0, 12);
       const template = readFileSync(join(process.cwd(), 'src/sw/sw-template.js'), 'utf8');
-      const source = template.replace('__VERSION__', version).replace('__PRECACHE__', JSON.stringify(precache, null, 2));
+      const source = template.replace('__VERSION__', version).replace('__PRECACHE__', JSON.stringify(precache, null, 2)).replace('__VOICE_PACKS__', JSON.stringify(voicePacks.sort()));
       this.emitFile({ type: 'asset', fileName: 'sw.js', source });
     },
   };

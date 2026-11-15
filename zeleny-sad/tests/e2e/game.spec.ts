@@ -568,6 +568,10 @@ test('large text: on for 2 class, off for 4 class, switch in Menu, no sideways s
 test('Listik reads aloud: on for 2 class, button reads the quest, switch in Menu', async ({ page }) => {
   // The test browser has no voices; record what would be spoken instead.
   await page.addInitScript(() => {
+    // Without the recorded voice (not downloaded yet), the phone's own voice reads.
+    const realFetch = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input instanceof Request ? input.url : input).includes('voice/') ? Promise.reject(new TypeError('offline')) : realFetch(input, init);
     const said: string[] = [];
     const how: string[] = [];
     (window as unknown as { __said: string[] }).__said = said;
@@ -635,6 +639,53 @@ test('Listik reads aloud: on for 2 class, button reads the quest, switch in Menu
   await toggle.uncheck();
   await page.locator('.sheet-close').click();
   await expect(page.locator('#quest .speak')).toHaveCount(0);
+});
+
+test('Listik reads aloud with the recorded voice once it is downloaded', async ({ page }) => {
+  await page.addInitScript(() => {
+    const log: string[] = [];
+    (window as unknown as { __log: string[] }).__log = log;
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (...args: Parameters<typeof start>) {
+      log.push(`clip ${this.buffer?.duration.toFixed(2)}`);
+      return start.apply(this, args);
+    };
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        speaking: false,
+        pending: false,
+        getVoices: () => [],
+        speak: () => log.push('system voice'),
+        cancel: () => undefined,
+      },
+    });
+  });
+  const pack = page.waitForResponse((r) => /\/voice\/pack-[0-9a-f]+\.txt$/.test(r.url()) && r.ok());
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await pack;
+  await page.waitForTimeout(300);
+  await page.locator('#quest .speak').click();
+  // «Первое семечко. Привет! Я Листик. …»: several recorded pieces, decoded and played; no system voice.
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as { __log: string[] }).__log)).length).toBeGreaterThan(3);
+  const log = await page.evaluate(() => (window as unknown as { __log: string[] }).__log);
+  expect(log).not.toContain('system voice');
+  for (const line of log) expect(Number(line.split(' ')[1])).toBeGreaterThan(0.2);
+
+  // Offline the next day: the recording comes from the service worker's cache.
+  await page.context().setOffline(true);
+  await page.reload();
+  await expect(page.locator('#quest .speak')).toBeVisible();
+  await expect
+    .poll(async () => {
+      await page.locator('#quest .speak').click();
+      return (await page.evaluate(() => (window as unknown as { __log: string[] }).__log)).filter((l) => l.startsWith('clip')).length;
+    })
+    .toBeGreaterThan(3);
+  expect(await page.evaluate(() => (window as unknown as { __log: string[] }).__log)).not.toContain('system voice');
+  await page.context().setOffline(false);
 });
 
 test('2–3 class: hint finger after a quiet moment, fair problem with a picture, quiz with pictures', async ({ page }) => {
