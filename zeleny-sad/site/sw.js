@@ -1,17 +1,22 @@
 /* Service worker for «Зелёный сад». Generated at build time from src/sw/sw-template.js. */
-const VERSION = '93db7022a289';
+const VERSION = '136a6f152012';
 const CACHE = 'green-garden-' + VERSION;
 const PRECACHE = [
   "./",
   "./assets/index-BN9R95lL.css",
-  "./assets/index-C20-kAqJ.js",
+  "./assets/index-BxvwjA9n.js",
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/icon.svg",
   "./icons/maskable-512.png",
-  "./manifest.webmanifest"
+  "./manifest.webmanifest",
+  "./voice/voice.json"
 ];
+// Listik's recorded voice: one big file, kept in its own cache across game updates, so a new
+// version of the game does not download it again. Only a new recording (new file name) replaces it.
+const VOICE_CACHE = 'gg-voice';
+const VOICE_PACKS = ["pack-81b729d705f0.txt","pack-f1215d839a23.txt"];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -24,6 +29,10 @@ self.addEventListener('activate', (event) => {
     (async () => {
       const keys = await caches.keys();
       await Promise.all(keys.filter((k) => k.startsWith('green-garden-') && k !== CACHE).map((k) => caches.delete(k)));
+      const voice = await caches.open(VOICE_CACHE);
+      for (const req of await voice.keys()) {
+        if (!VOICE_PACKS.some((name) => req.url.endsWith('/' + name))) await voice.delete(req);
+      }
       await self.clients.claim();
     })(),
   );
@@ -40,6 +49,19 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   // The play journal goes straight to the network and is never cached.
   if (url.pathname.startsWith('/api/')) return;
+
+  if (url.pathname.includes('/voice/pack-')) {
+    event.respondWith(
+      caches.open(VOICE_CACHE).then(async (cache) => {
+        const cached = await cache.match(req, { ignoreSearch: true });
+        if (cached) return cached;
+        const res = await fetch(req);
+        if (res.ok && res.type === 'basic') await cache.put(req, res.clone());
+        return res;
+      }),
+    );
+    return;
+  }
 
   if (req.mode === 'navigate') {
     // The app is a single page: always answer navigations from the precached shell.

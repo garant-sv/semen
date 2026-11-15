@@ -127,6 +127,7 @@ import {
   wildSVG,
 } from './scene';
 import { russianVoiceMissing, say, speechText, stopSpeaking, voiceSupported } from './voice';
+import { loadVoicePack } from './voice-pack';
 import { Depth, requestTilt, tiltNeedsPermission } from './depth';
 import { play, setSoundEnabled } from './sound';
 
@@ -385,6 +386,7 @@ export class App {
     setSoundEnabled(this.state.settings.sound);
     void this.startTilt(false);
     this.applyTextSize();
+    this.prepareVoice();
     setTelemetryGrade(this.state.profile.grade);
     track('start', {
       st: loaded.status,
@@ -1538,6 +1540,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
       this.persist();
       this.renderQuest();
       if (!on) return stopSpeaking();
+      this.prepareVoice();
       say('Привет! Теперь я буду читать тебе вслух. Нажми на кнопку с динамиком, чтобы послушать ещё раз.', youngMode(this.state));
       if (russianVoiceMissing()) this.toast('На этом телефоне не нашёлся русский голос. Его можно скачать в настройках телефона, в разделе про синтез речи.', 'warn');
     });
@@ -1598,6 +1601,11 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   /** Read aloud right away (called from a tap, which phones require for speech). */
   private autoSay(html: string) {
     if (voiceOn(this.state)) say(html, youngMode(this.state));
+  }
+
+  /** Download Listik's recorded voice in the background (once) when reading aloud is on. */
+  private prepareVoice() {
+    if (voiceOn(this.state)) void loadVoicePack();
   }
 
   /** Large text for 2–3 class (or by the player's choice). */
@@ -1670,6 +1678,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
       setProfile(this.state, nick, grade, this.now());
       setTelemetryGrade(grade);
       this.applyTextSize();
+      this.prepareVoice();
       track('profile', { first, named: Boolean(this.state.profile.nick) });
       this.persist();
       this.closeSheet();
@@ -1681,7 +1690,8 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   private showAbout() {
     this.openSheet(`<h2>Об игре</h2><p>«Зелёный сад» — уютная игра о том, как разбудить заброшенный волшебный сад. Сделана с любовью для юных садоводов.</p>
 <ul class="plain"><li>Без рекламы, покупок, регистрации и чатов.</li><li>Пока игра в тестировании, она отправляет обезличенный журнал: какой вопрос или задача попались, верно ли ответ, и ошибки программы. Имя и сад не отправляются. Выключить можно в Меню: «Помогать улучшать игру».</li><li>Растения не погибают, если долго не заходить.</li><li>Работает без интернета после первой загрузки.</li></ul>
-<p class="muted small">Вся графика нарисована кодом специально для этой игры, звуки синтезируются в браузере. Сторонних картинок, шрифтов и звуков нет.</p>`);
+<p class="muted small">Вся графика нарисована кодом специально для этой игры, звуки синтезируются в браузере. Сторонних картинок и шрифтов нет.</p>
+<p class="muted small">Голос Листика записан заранее нейросетью Vosk TTS (модель vosk-model-tts-ru-0.10-multi, голос № 1, Alpha Cephei, лицензия Apache 2.0); ударения — silero-stress (Silero Team, лицензия MIT). Если запись ещё не скачалась, читает голос телефона.</p>`);
   }
 
   private confirmReset() {
