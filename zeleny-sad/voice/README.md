@@ -8,29 +8,32 @@
 
 ## Чем записано
 
-- Синтез речи: [Silero TTS](https://github.com/snakers4/silero-models), модель `v5_6_ru`, голос `xenia`,
-  48 кГц. Записано заранее; в самой игре нейросети нет, и текст никуда не отправляется.
-- Лицензия моделей Silero: CC BY-NC-SA 4.0 (файл LICENSE в репозитории silero-models) — разрешено
-  некоммерческое использование с указанием авторов. Игра бесплатная, авторство указано в «Об игре».
-  Если игра станет платной, нужна коммерческая лицензия Silero или другая модель
-  (например, `v5_cis_base` от Silero под MIT; ударения к ней ставит `silero-stress`, тоже MIT).
-- Ударения: [silero-stress](https://github.com/snakers4/silero-stress) (MIT, встроен в модель) плюс
-  ручные исправления в `tools/gen.py` (`FIX`): клеИт, пОлюсами, разделИ, стОит, равнО, сОрок и др.
+- Синтез речи: [Vosk TTS](https://github.com/alphacep/vosk-tts), модель `vosk-model-tts-ru-0.10-multi`,
+  голос № 1 (из 57), 22 кГц. Выбран на слух из пяти весёлых вариантов: прежний голос Silero xenia
+  звучал грустно (замер мелодики: размах тона 16 полутонов против 7 у xenia).
+  Записано заранее; в самой игре нейросети нет, и текст никуда не отправляется.
+- Лицензия Vosk TTS и модели: Apache 2.0 (README модели) — можно и в платной игре, с указанием авторов
+  (указано в «Об игре»).
+- Ударения: словарь Vosk не видит смысла фразы («равно», «стоит», «часа» везде одинаково) и в нём есть
+  ошибки (создАют, полИвай), поэтому ударения по смыслу ставит [silero-stress](https://github.com/snakers4/silero-stress)
+  (MIT), а произношение слова берётся из варианта словаря с этим ударением. Плюс ручные исправления
+  в `tools/gen.py` (`FIX`): клеИт, пОлюсами, разделИ, стОит, равнО, сОрок, трёмстАм, гОсти, гУбы,
+  о стЕпи, о нОчи, солИт и др. — найдены сравнением silero-stress со словарём Vosk по всем фразам.
+- Прежний движок (Silero v5_6_ru, xenia, CC BY-NC-SA 4.0) остался в `gen.py`: `ENGINE=silero`.
 - Проверка «на слух»: каждая запись распознаётся моделью GigaAM v2 (sherpa-onnx) и сравнивается
-  с текстом (`tools/check.py`). Расхождения разобраны вручную: это редукция гласных в распознавании
-  («тундро», «грипп»), а не ошибки голоса.
+  с текстом (`tools/check.py`).
 
 ## Как перезаписать (после изменения текстов игры)
 
 ```
 npx vite-node scripts/voice-phrases.ts --young > phrases.json   # все фразы 2–3 класса
-python voice/tools/gen.py phrases.json clips/                    # SILERO_MODEL=путь/к/v5_6_ru.pt
+python voice/tools/gen.py phrases.json clips/                    # VOSK_MODEL=папка модели Vosk
 python voice/tools/check.py clips/                               # ASR_DIR=папка модели GigaAM
 python voice/tools/pack.py clips/ public/voice
 npm run build
 ```
 
-Нужны: Python 3.10+, `torch`, `soundfile`, `numpy`, `sherpa-onnx`, `scipy`, ffmpeg с libmp3lame.
+Нужны: Python 3.10+, `vosk-tts`, `silero-stress`, `torch`, `soundfile`, `numpy`, `sherpa-onnx`, `scipy`, ffmpeg с libmp3lame.
 Файлы моделей в репозиторий не кладутся. `tests/unit/voice-pack.test.ts` падает, если какой-то
 фразы игры для 2–3 класса нет в записи.
 

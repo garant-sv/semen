@@ -1,10 +1,10 @@
 /* Service worker for «Зелёный сад». Generated at build time from src/sw/sw-template.js. */
-const VERSION = 'f0b55b048fbe';
+const VERSION = '136a6f152012';
 const CACHE = 'green-garden-' + VERSION;
 const PRECACHE = [
   "./",
   "./assets/index-BN9R95lL.css",
-  "./assets/index-Bqn_d45I.js",
+  "./assets/index-BxvwjA9n.js",
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -16,7 +16,7 @@ const PRECACHE = [
 // Listik's recorded voice: one big file, kept in its own cache across game updates, so a new
 // version of the game does not download it again. Only a new recording (new file name) replaces it.
 const VOICE_CACHE = 'gg-voice';
-const VOICE_PACKS = ["pack-99200d9a94c6.txt","pack-eeaf4017bcc6.txt"];
+const VOICE_PACKS = ["pack-81b729d705f0.txt","pack-f1215d839a23.txt"];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
