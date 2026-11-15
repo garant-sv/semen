@@ -17,6 +17,13 @@
 # Повторный запуск = обновление игры до последней версии из репозитория.
 # Адрес по умолчанию: sad.kvestapp.ru (нужна A-запись sad → IP сервера).
 # Журнал в GitHub (один раз):  curl -fsSL .../zeleny-sad-install.sh | LOGS_REPO=garant-sv/zeleny-sad-logs bash
+#
+# Самообновление (с 0.8): скрипт ставит /etc/zeleny-sad/site-update.sh и /etc/cron.d/zeleny-sad-update.
+# Раз в 10 минут сервер сам смотрит, изменилась ли ветка main, и если да — забирает ТОЛЬКО
+# готовую сборку zeleny-sad/site (статические файлы) и переключает на неё ссылку current.
+# Код из GitHub на сервере не исполняется, nginx и другие сайты не трогаются; если после
+# переключения сайт не отвечает 200 — возвращается прежний выпуск.
+# Выключить: curl -fsSL .../zeleny-sad-install.sh | AUTO_UPDATE=0 bash
 set -euo pipefail
 
 DOMAIN="${DOMAIN:-sad.kvestapp.ru}"
@@ -25,6 +32,7 @@ ROOT=/var/www/zeleny-sad
 LOG_DIR=/var/log/zeleny-sad
 ETC=/etc/zeleny-sad
 LOGS_REPO="${LOGS_REPO:-$(cat "$ETC/logs-repo" 2>/dev/null || true)}"
+AUTO_UPDATE="${AUTO_UPDATE:-1}"
 CONF_AVAIL=/etc/nginx/sites-available/zeleny-sad.conf
 CONF_ENABLED=/etc/nginx/sites-enabled/zeleny-sad.conf
 
@@ -237,6 +245,77 @@ JOURNAL
 chmod 700 "$ETC/journal-daily.sh"
 echo '5 0 * * * root /etc/zeleny-sad/journal-daily.sh >> /var/log/zeleny-sad/journal-daily.out 2>&1' > /etc/cron.d/zeleny-sad-journal
 chmod 644 /etc/cron.d/zeleny-sad-journal
+
+say "Самообновление игры"
+cat > "$ETC/site-update.sh" <<'UPDATE'
+#!/usr/bin/env bash
+# Самообновление «Зелёного сада»: только статические файлы сборки, только своя папка.
+# Ставит и обновляет его deploy/zeleny-sad-install.sh; запускается из /etc/cron.d/zeleny-sad-update.
+set -euo pipefail
+DOMAIN="$(cat /etc/zeleny-sad/domain)"
+ROOT=/var/www/zeleny-sad
+ETC=/etc/zeleny-sad
+REPO_URL=https://github.com/garant-sv/semen
+LOCK=/run/zeleny-sad-update.lock
+exec 9>"$LOCK"
+flock -n 9 || exit 0
+
+SHA="$(git ls-remote "$REPO_URL" refs/heads/main 2>/dev/null | awk '{print $1}')"
+[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "$(date -Is) не удалось узнать версию main"; exit 0; }
+[ "$SHA" = "$(cat "$ETC/deployed-sha" 2>/dev/null || true)" ] && exit 0
+# Эту версию уже пробовали, и сайт с ней не ответил: ждём следующую, не дёргаем сайт каждые 10 минут.
+[ "$SHA" = "$(cat "$ETC/failed-sha" 2>/dev/null || true)" ] && exit 0
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+curl -fsSL --max-time 120 "https://codeload.github.com/garant-sv/semen/tar.gz/$SHA" | tar -xz -C "$TMP" --wildcards '*/zeleny-sad/site/*'
+SRC="$(find "$TMP" -maxdepth 3 -type d -path '*/zeleny-sad/site' | head -1)"
+[ -n "$SRC" ] && [ -f "$SRC/index.html" ] && [ -f "$SRC/sw.js" ] || { echo "$(date -Is) $SHA: в архиве нет сборки, пропускаю"; exit 0; }
+# Только обычные файлы понятных веб-типов и разумный размер — ничего исполняемого и лишнего.
+if find "$SRC" ! -type d ! -type f | grep -q . \
+   || find "$SRC" -type f ! -regex '.*\.\(html\|js\|css\|json\|webmanifest\|png\|svg\|ico\|txt\|woff2\|webp\|jpg\)$' | grep -q . \
+   || [ "$(du -sm "$SRC" | awk '{print $1}')" -gt 50 ]; then
+  echo "$(date -Is) $SHA: в сборке неожиданные файлы или она слишком большая, пропускаю"
+  exit 0
+fi
+
+PREV="$(readlink -f "$ROOT/current" || true)"
+RELEASE="$ROOT/releases/$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$RELEASE"
+cp -r "$SRC/." "$RELEASE/"
+chmod -R a+rX,go-w "$RELEASE"
+ln -sfn "$RELEASE" "$ROOT/current.new" && mv -Tf "$ROOT/current.new" "$ROOT/current"
+
+CODE=000
+for _ in 1 2 3 4 5; do
+  sleep 1
+  CODE="$(curl --noproxy '*' -sk -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/")" || true
+  [ "$CODE" = 200 ] && break
+done
+if [ "$CODE" != 200 ] && [ -n "$PREV" ] && [ -d "$PREV" ]; then
+  ln -sfn "$PREV" "$ROOT/current.new" && mv -Tf "$ROOT/current.new" "$ROOT/current"
+  rm -rf "$RELEASE"
+  echo "$SHA" > "$ETC/failed-sha"
+  echo "$(date -Is) $SHA: сайт ответил $CODE, вернул прежний выпуск"
+  exit 1
+fi
+echo "$SHA" > "$ETC/deployed-sha"
+ls -1dt "$ROOT"/releases/* | tail -n +4 | xargs -r rm -rf
+echo "$(date -Is) выложен $SHA"
+UPDATE
+chmod 700 "$ETC/site-update.sh"
+echo "$DOMAIN" > "$ETC/domain"
+if [ "$AUTO_UPDATE" = 1 ]; then
+  command -v git >/dev/null || { apt-get update -qq && apt-get install -y -qq git; }
+  command -v flock >/dev/null || { apt-get update -qq && apt-get install -y -qq util-linux; }
+  git ls-remote https://github.com/garant-sv/semen refs/heads/main 2>/dev/null | awk '{print $1}' > "$ETC/deployed-sha" || true
+  echo '*/10 * * * * root /etc/zeleny-sad/site-update.sh >> /var/log/zeleny-sad/update.out 2>&1' > /etc/cron.d/zeleny-sad-update
+  chmod 644 /etc/cron.d/zeleny-sad-update
+  echo "Включено: раз в 10 минут сервер сам забирает новую сборку игры из main (журнал: /var/log/zeleny-sad/update.out)."
+else
+  rm -f /etc/cron.d/zeleny-sad-update
+  echo "Самообновление выключено (AUTO_UPDATE=0)."
+fi
 
 if [ -n "$LOGS_REPO" ]; then
   command -v git >/dev/null || { apt-get update -qq && apt-get install -y -qq git; }
