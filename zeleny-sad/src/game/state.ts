@@ -36,7 +36,7 @@ import { FAIR_EVERY_SEC, FAIR_FROM_QUEST, FAIR_QUEUE, fairLevel } from './math';
 import { RUS_FROM_QUEST, RUS_REWARD, RUS_TRY_REWARD, WORDS, viewWord, wordsForGrade } from './russian';
 import { QUESTIONS, QUIZ_EVERY, QUIZ_FROM_QUEST, QUIZ_REWARD, QUIZ_TRY_REWARD, questionGrades, type Grade, type Question } from './quiz';
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 export interface Plot {
   plant: PlantId | null;
@@ -111,6 +111,10 @@ export interface GameState {
   };
   /** Who is playing: a nickname (stays on the device) and the school class that sets the tasks. */
   profile: { nick: string; grade: Grade | null };
+  /** The player's own gardener who walks around the garden (3–5 class); null until created. */
+  gardener: Gardener | null;
+  /** «Ветер раскидал семена»: which seeds still lie on the grass at the start, as bits (3–5 class). */
+  startSeeds: number;
   /** «Таблички у грядок»: Russian spelling. */
   rus: {
     /** Words filled in correctly (shown in the word list; asked less often). */
@@ -168,6 +172,8 @@ export function newGame(now: number): GameState {
     fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 },
     rus: { learned: [], correct: 0, total: 0 },
     profile: { nick: '', grade: null },
+    gardener: null,
+    startSeeds: 0,
     settings: { sound: true, tilt: true, bigText: null, voice: null },
   };
 }
@@ -474,6 +480,67 @@ export const voiceOn = (s: GameState): boolean => s.settings.voice ?? youngMode(
 export function setProfile(s: GameState, nick: string, grade: Grade, now: number) {
   s.profile = { nick: cleanNick(nick), grade };
   s.updatedAt = now;
+}
+
+// ---------------------------------------------------------------- gardener
+
+export const SKINS = ['#F6D2B4', '#E2AE84', '#A8714B'] as const;
+export const HATS = ['straw', 'cap', 'panama', 'bandana'] as const;
+export type Hat = (typeof HATS)[number];
+export const HAT_NAMES: Record<Hat, string> = { straw: 'Соломенная шляпа', cap: 'Кепка', panama: 'Панама с цветком', bandana: 'Бандана' };
+export const OUTFITS = ['#3F8F5A', '#3E7CC4', '#E0703A', '#9A5BC2', '#D94F70'] as const;
+/** Pets are garden animals the child already knows from the collection. */
+export const PETS = ['hedgehog', 'ladybug', 'frog', 'bee'] as const;
+export type Pet = (typeof PETS)[number];
+
+export interface Gardener {
+  skin: number;
+  hat: Hat;
+  outfit: number;
+  pet: Pet;
+}
+
+/** Number of seeds the wind scatters at the start, and petals for each. */
+export const START_SEEDS = 3;
+/** All seeds lying on the grass (one bit per seed, so they can be picked in any order). */
+export const ALL_START_SEEDS = (1 << START_SEEDS) - 1;
+/** Is seed k still on the grass? */
+export const seedLeft = (s: GameState, k: number): boolean => (s.startSeeds & (1 << k)) !== 0;
+/** How many seeds are still on the grass. */
+export const seedsLeft = (s: GameState): number => Array.from({ length: START_SEEDS }, (_, k) => seedLeft(s, k)).filter(Boolean).length;
+export const START_SEED_PETALS = 2;
+
+/** 3–5 class plays with their own gardener; 2 class is led by Listik (and may add one from the Menu). */
+export const gardenerByDefault = (s: GameState): boolean => s.profile.grade !== null && s.profile.grade >= 3;
+
+/** A random look, so the creator never opens on an empty figure. */
+export function randomGardener(rand: () => number): Gardener {
+  const pick = <T>(a: readonly T[]) => a[Math.floor(rand() * a.length) % a.length];
+  return { skin: Math.floor(rand() * SKINS.length) % SKINS.length, hat: pick(HATS), outfit: Math.floor(rand() * OUTFITS.length) % OUTFITS.length, pet: pick(PETS) };
+}
+
+/**
+ * Save the gardener. The first time, on a fresh garden, the wind scatters seeds to collect:
+ * something to do in the very first minute, before anything grows.
+ */
+export function setGardener(s: GameState, g: Gardener, now: number): { scattered: boolean } {
+  const first = s.gardener === null;
+  s.gardener = { ...g };
+  s.updatedAt = now;
+  if (first && s.questIndex === 0 && s.stats.harvested === 0) {
+    s.startSeeds = ALL_START_SEEDS;
+    return { scattered: true };
+  }
+  return { scattered: false };
+}
+
+/** Pick up seed k (any order). */
+export function collectStartSeed(s: GameState, k: number, now: number): Ok<{ petals: number; left: number }> | Fail {
+  if (!seedLeft(s, k)) return fail('Этого семечка на траве уже нет.');
+  s.startSeeds &= ~(1 << k);
+  s.petals += START_SEED_PETALS;
+  s.updatedAt = now;
+  return { ok: true, petals: START_SEED_PETALS, left: seedsLeft(s) };
 }
 
 /** A nickname: up to 16 letters, digits, spaces and hyphens. */

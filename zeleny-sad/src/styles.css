@@ -3032,3 +3032,123 @@ button.card:active {
     transform: scale(1.4);
   }
 }
+
+/* ---------------------------------------------------------------- the gardener (3–5 class) */
+
+#l-gardener {
+  pointer-events: none;
+}
+#l-gardener .gd-me,
+#l-gardener .gd-pet {
+  transition: transform var(--walk, 500ms) cubic-bezier(0.45, 0.05, 0.4, 1);
+}
+#l-gardener .gd-pet {
+  transition-duration: calc(var(--walk, 500ms) + 160ms);
+  transition-delay: 70ms;
+}
+#l-gardener .gd-flip {
+  transition: transform 0.14s ease;
+}
+#l-gardener.jump .gd-me,
+#l-gardener.jump .gd-pet,
+#l-gardener.jump .gd-flip {
+  transition: none;
+}
+#l-gardener .gd-body {
+  animation: gd-breathe 2.6s ease-in-out infinite;
+}
+#l-gardener.walking .gd-body,
+#l-gardener.walking .gd-pet .gd-flip > g {
+  animation: gd-step 0.26s ease-in-out infinite;
+}
+@keyframes gd-breathe {
+  50% {
+    transform: translateY(-0.8px);
+  }
+}
+@keyframes gd-step {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.start-seed {
+  cursor: pointer;
+}
+.start-seed .seed-bob {
+  animation: seed-bob 1.5s ease-in-out infinite;
+}
+.start-seed:nth-child(2) .seed-bob {
+  animation-delay: -0.5s;
+}
+.start-seed:nth-child(3) .seed-bob {
+  animation-delay: -1s;
+}
+@keyframes seed-bob {
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.gardener-sheet .gd-preview {
+  display: grid;
+  place-items: center;
+  margin: 4px auto 6px;
+  width: 190px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 60%, #e8f4d6 0 58%, transparent 60%);
+}
+.gardener-sheet .gd-row-title {
+  margin: 10px 0 6px;
+}
+.gardener-sheet .gd-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gardener-sheet .gd-opt {
+  display: grid;
+  place-items: center;
+  min-width: 56px;
+  min-height: 56px;
+  padding: 4px;
+  border-radius: 16px;
+  border: 2px solid var(--cream-3);
+  background: #fffaf0;
+  box-shadow: 0 3px 0 var(--cream-3);
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+}
+.gardener-sheet .gd-opt.on {
+  border-color: var(--green);
+  background: #eaf5dc;
+  box-shadow: 0 3px 0 var(--green);
+  transform: translateY(-2px);
+}
+.gardener-sheet .swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(59, 46, 30, 0.25);
+}
+.gardener-sheet .gd-actions {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #l-gardener .gd-me,
+  #l-gardener .gd-pet,
+  #l-gardener .gd-flip {
+    transition: none;
+  }
+  #l-gardener .gd-body,
+  #l-gardener.walking .gd-body,
+  .start-seed .seed-bob {
+    animation: none;
+  }
+}

@@ -611,3 +611,25 @@ export function burstSVG(x: number, y: number, kind: 'water' | 'harvest' | 'magi
     return `<g class="spark" style="--dx:${(Math.cos(a) * 34).toFixed(0)}px;--dy:${(Math.sin(a) * 26).toFixed(0)}px">${leaf(0, 0, 8, (a * 180) / Math.PI, col, false)}</g>`;
   }).join('')}</g>`;
 }
+
+// ---------------------------------------------------------------- the gardener
+
+/** Where the gardener stands when a view opens: in the gap between the beds. */
+export const GARDENER_HOME = { garden: { x: 140, y: 505 }, other: { x: 200, y: 515 } } as const;
+
+/** Grass the gardener can walk on (below the fence and the brook, inside the picture). */
+export function walkable(x: number, y: number): boolean {
+  return x >= 24 && x <= 376 && y >= 300 && y <= 628;
+}
+
+/** Where to stand to work at a bed: beside it, on the side facing the middle of the garden. */
+export function gardenerSpotNear(p: { x: number; y: number }): { x: number; y: number } {
+  return { x: p.x + (p.x < 200 ? 50 : p.x > 200 ? -50 : 46), y: p.y + 22 };
+}
+
+/** «Ветер раскидал семена»: where the three seeds lie (clear of beds and decoration spots). */
+export const START_SEED_SPOTS: { x: number; y: number }[] = [
+  { x: 262, y: 332 },
+  { x: 370, y: 346 },
+  { x: 262, y: 505 },
+];
