@@ -2,6 +2,7 @@
 // no external images, no emoji. Each object is drawn with its base point at (0, 0).
 
 import type { DecoId, GuestId, PlantId, Stage } from '../game/data';
+import { OUTFITS, SKINS, type Gardener, type Hat, type Pet } from '../game/state';
 
 export const C = {
   ink: '#3B2E1E',
@@ -725,4 +726,68 @@ export function fairPicHTML(pic: FairPic): string {
 <text x="${x0 - 6}" y="${y0 + h / 2 + 5}" text-anchor="end" font-size="16" font-weight="800" fill="#3F3326">${pic.b} м</text>
 <text x="${x0 + w + 6}" y="${y0 + h / 2 + 5}" font-size="16" font-weight="800" fill="#3F3326">${pic.b} м</text>
 </svg></div>`;
+}
+
+// ---------------------------------------------------------------- the player's gardener
+
+/** Darker shade of a #RRGGBB colour (for outlines and folds). */
+function shade(hex: string, k = 0.72): string {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v: number) => Math.round(v * k).toString(16).padStart(2, '0');
+  return `#${c((n >> 16) & 255)}${c((n >> 8) & 255)}${c(n & 255)}`;
+}
+
+function hatArt(hat: Hat, outfit: string): string {
+  switch (hat) {
+    case 'straw':
+      return `<ellipse cx="0" cy="-51" rx="17" ry="4.6" fill="#E9C76B" stroke="#B8923E" stroke-width=".9"/><path d="M-9 -51 Q-9 -63 0 -63 Q9 -63 9 -51Z" fill="#F0D27A" stroke="#B8923E" stroke-width=".9"/><path d="M-9 -53.5 L9 -53.5" stroke="${outfit}" stroke-width="2.6"/>`;
+    case 'cap':
+      return `<path d="M-10 -50 Q-10 -62 0 -62 Q10 -62 10 -50Z" fill="${outfit}" stroke="${shade(outfit)}" stroke-width=".9"/><path d="M4 -51 Q15 -52 17 -49 Q10 -47.5 4 -48.5Z" fill="${shade(outfit, 0.85)}"/><circle cx="0" cy="-62" r="1.6" fill="${shade(outfit)}"/>`;
+    case 'panama':
+      return `<path d="M-15 -49 Q0 -55 15 -49 Q12 -46 0 -47 Q-12 -46 -15 -49Z" fill="#F4EFE2" stroke="#BDB3A0" stroke-width=".9"/><path d="M-9 -50 Q-8 -61 0 -61 Q8 -61 9 -50Z" fill="#FBF7EC" stroke="#BDB3A0" stroke-width=".9"/><g transform="translate(-6 -53)">${[0, 72, 144, 216, 288].map((a) => `<ellipse cx="0" cy="-2.4" rx="1.6" ry="2.4" fill="#F28CB1" transform="rotate(${a})"/>`).join('')}<circle r="1.4" fill="#F7C948"/></g>`;
+    case 'bandana':
+      return `<path d="M-10.5 -47 Q-11 -58 0 -58.5 Q11 -58 10.5 -47 Q0 -50 -10.5 -47Z" fill="#D9443B" stroke="#9E2C25" stroke-width=".9"/><circle cx="-4" cy="-53" r="1" fill="#fff" opacity=".8"/><circle cx="3" cy="-55" r="1" fill="#fff" opacity=".8"/><circle cx="5" cy="-50.5" r="1" fill="#fff" opacity=".8"/><path d="M-10 -49 L-15 -46 L-12 -44Z M-10 -49 L-14 -50 L-12.5 -47Z" fill="#D9443B" stroke="#9E2C25" stroke-width=".7"/>`;
+  }
+}
+
+/** The gardener standing with feet at (0, 0), about 64 units tall, looking to the right. */
+export function gardenerArt(g: Gardener): string {
+  const skin = SKINS[g.skin] ?? SKINS[0];
+  const cloth = OUTFITS[g.outfit] ?? OUTFITS[0];
+  const dark = shade(cloth);
+  return `${shadow(14, 4)}
+<g class="gd-legs"><rect x="-6.5" y="-13" width="5" height="11" rx="2" fill="${shade(cloth, 0.55)}"/><rect x="1.5" y="-13" width="5" height="11" rx="2" fill="${shade(cloth, 0.55)}"/>
+<path d="M-8 -3 h7 v3 h-8.5 Q-9.5 -3 -8 -3Z M1 -3 h7 Q10 -3 9.5 0 h-8.5Z" fill="#6B4428"/></g>
+<path d="M-10 -14 Q-11 -33 0 -34 Q11 -33 10 -14 Q0 -11 -10 -14Z" fill="${cloth}" stroke="${dark}" stroke-width="1"/>
+<path d="M-5.5 -31 L-5.5 -16 M5.5 -31 L5.5 -16" stroke="${dark}" stroke-width="1.6" opacity=".55"/>
+<rect x="-4" y="-25" width="8" height="6" rx="1.5" fill="${shade(cloth, 0.86)}" stroke="${dark}" stroke-width=".7"/>
+<path d="M-10 -30 Q-15 -24 -13 -17" stroke="${cloth}" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="-13" cy="-16" r="2.6" fill="${skin}"/>
+<g class="gd-arm"><path d="M10 -30 Q15 -25 14 -19" stroke="${cloth}" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="14" cy="-18" r="2.6" fill="${skin}"/>
+<g transform="translate(18 -15)"><path d="M-3 -2 h8 l1 7 h-10Z" fill="#7FB8D6" stroke="#4D86A3" stroke-width=".8"/><path d="M5 0 l6 -4" stroke="#4D86A3" stroke-width="1.6" stroke-linecap="round"/><path d="M-3 -1 Q-5 -5 -2 -5" stroke="#4D86A3" stroke-width="1" fill="none"/></g></g>
+<rect x="-3" y="-38" width="6" height="5" fill="${skin}"/>
+<circle cx="0" cy="-44" r="10.5" fill="${skin}" stroke="${shade(skin, 0.8)}" stroke-width=".8"/>
+<path d="M-10 -46 Q-9 -55 0 -55 Q9 -55 10 -46 Q5 -50 0 -49 Q-5 -50 -10 -46Z" fill="#6B4428"/>
+<ellipse cx="-3.2" cy="-43.5" rx="1.3" ry="1.8" fill="${C.ink}"/><ellipse cx="4" cy="-43.5" rx="1.3" ry="1.8" fill="${C.ink}"/>
+<circle cx="-6" cy="-39.5" r="2" fill="#F08C8C" opacity=".45"/><circle cx="7" cy="-39.5" r="2" fill="#F08C8C" opacity=".45"/>
+<path d="M-2 -39 Q0.5 -36.6 3 -39" stroke="${C.ink}" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+${hatArt(g.hat, cloth)}`;
+}
+
+/** The pet: one of the garden animals, small, walking behind the gardener. */
+export function petArt(pet: Pet): string {
+  return `<g transform="scale(.5)">${guestArt(pet)}</g>`;
+}
+
+/** Gardener (and pet) as a standalone picture for the creator sheet and the Menu. */
+export function gardenerIcon(g: Gardener, size = 120, withPet = true): string {
+  return `<svg class="icon-svg" viewBox="-40 -70 80 74" width="${size}" height="${Math.round((size * 74) / 80)}" aria-hidden="true">${withPet ? `<g transform="translate(-24 2)">${petArt(g.pet)}</g>` : ''}<g transform="translate(6 0)">${gardenerArt(g)}</g></svg>`;
+}
+
+export function hatIcon(hat: Hat, outfit: string, size = 44): string {
+  return `<svg class="icon-svg" viewBox="-20 -66 40 24" width="${size}" height="${Math.round((size * 24) / 40)}" aria-hidden="true"><circle cx="0" cy="-44" r="10.5" fill="#F6D2B4"/>${hatArt(hat, outfit)}</svg>`;
+}
+
+/** A seed the wind dropped on the grass: a little striped sunflower seed with a sparkle. */
+export function seedArt(): string {
+  return `${shadow(8, 2.6, 2)}<g class="seed-bob"><circle r="13" cy="-7" fill="#FFF3B8" opacity=".55"/><g transform="translate(0 -7) rotate(-20)"><path d="M0 -8 Q6 -3 0 8 Q-6 -3 0 -8Z" fill="#3B3328" stroke="#1F1A14" stroke-width=".8"/><path d="M-1.5 -5 L-1.5 5 M1.5 -5 L1.5 5" stroke="#E8E2D2" stroke-width=".9" opacity=".85"/></g><path d="M10 -18 l1.2 3 3 1.2 -3 1.2 -1.2 3 -1.2 -3 -3 -1.2 3 -1.2Z" fill="#FFE27A"/></g>`;
 }
