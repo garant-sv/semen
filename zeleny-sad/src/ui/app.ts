@@ -162,7 +162,7 @@ import {
   gardenerSpotNear,
   walkable,
 } from './scene';
-import { russianVoiceMissing, say, speechText, stopSpeaking, voiceSupported } from './voice';
+import { isSpeaking, onVoiceIdle, russianVoiceMissing, say, speechText, stopSpeaking, voiceSupported } from './voice';
 import { loadVoicePack } from './voice-pack';
 import { Depth, requestTilt, tiltNeedsPermission } from './depth';
 import { play, setSoundEnabled } from './sound';
@@ -363,12 +363,18 @@ export class App {
       },
       { capture: true, passive: true },
     );
+    // The speaker button: the first tap reads, a tap while Listik reads stops him.
+    onVoiceIdle(() => this.markSpeaking(null));
     this.root.addEventListener('click', (e) => {
       const b = (e.target as Element).closest<HTMLElement>('[data-say]');
       if (!b) return;
       e.stopPropagation();
       e.preventDefault();
-      say(b.dataset.say ?? '', youngMode(this.state));
+      if (b.classList.contains('speaking') && isSpeaking()) {
+        stopSpeaking();
+        return;
+      }
+      if (say(b.dataset.say ?? '', youngMode(this.state))) this.markSpeaking(b.dataset.say ?? '');
     });
     const stage = $(this.root, '#stage');
     const fit = () => this.fitScene(stage.clientWidth, stage.clientHeight);
@@ -1816,12 +1822,21 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   /** «Послушать» button: Listik reads the text aloud. Empty when reading aloud is off. */
   private speakBtn(html: string): string {
     if (!voiceOn(this.state) || !voiceSupported()) return '';
-    return `<button type="button" class="speak" data-say="${esc(speechText(html))}" aria-label="Послушать">${ICONS.speaker}</button>`;
+    return `<button type="button" class="speak" data-say="${esc(speechText(html))}" aria-label="Послушать">${ICONS.speaker}<svg class="stop-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5" fill="currentColor"/></svg></button>`;
   }
 
   /** Read aloud right away (called from a tap, which phones require for speech). */
   private autoSay(html: string) {
-    if (voiceOn(this.state)) say(html, youngMode(this.state));
+    if (voiceOn(this.state) && say(html, youngMode(this.state))) this.markSpeaking(speechText(html));
+  }
+
+  /** Show which speaker buttons are reading now (their text), so a tap on them stops Listik. */
+  private markSpeaking(text: string | null) {
+    this.root.querySelectorAll<HTMLElement>('.speak[data-say]').forEach((b) => {
+      const on = text !== null && b.dataset.say === text;
+      b.classList.toggle('speaking', on);
+      b.setAttribute('aria-label', on ? 'Остановить' : 'Послушать');
+    });
   }
 
   /** Download Listik's recorded voice in the background (once) when reading aloud is on. */
