@@ -26,10 +26,13 @@
 ## Как перезаписать (после изменения текстов игры)
 
 ```
-npx vite-node scripts/voice-phrases.ts --young > phrases.json   # все фразы 2–3 класса
-python voice/tools/gen.py phrases.json clips/                    # VOSK_MODEL=папка модели Vosk
+npx vite-node scripts/voice-phrases.ts --young > young.json      # фразы 2–3 класса: пишутся целиком
+npx vite-node scripts/voice-phrases.ts > all.json                # все фразы, с ярмаркой 4–5 класса
+python voice/tools/chunks.py all.json young.json chunks.json seq.json   # кусочки для больших чисел
+python -c "import json;json.dump(json.load(open('young.json'))+json.load(open('chunks.json')),open('rec.json','w'),ensure_ascii=False)"
+python voice/tools/gen.py rec.json clips/                        # VOSK_MODEL=папка модели Vosk
 python voice/tools/check.py clips/                               # ASR_DIR=папка модели GigaAM
-python voice/tools/pack.py clips/ public/voice
+python voice/tools/pack.py clips/ public/voice seq.json
 npm run build
 ```
 
@@ -48,4 +51,10 @@ npm run build
   с паузой 0,32 с между предложениями и 0,07 с внутри. На iPhone включается режим `playback`,
   чтобы голос был слышен и при беззвучном режиме (iOS 17+).
 - Service worker хранит запись в отдельном кэше `gg-voice`: новая версия игры её не перекачивает.
-- Задачи ярмарки 4–5 класса (большие числа) в запись не входят — их читает голос телефона.
+- Задачи ярмарки 4–5 класса (большие числа, 18 тысяч разных фраз) целиком не записаны: они
+  собираются из 488 кусочков (`tools/chunks.py`): слова вокруг числа и само число частями —
+  «равно | двум тысячам, | трёмстам, | сорока пяти». Кусочки числа записаны с запятой на конце, чтобы
+  голос не «ставил точку» посреди числа; между кусочками 20 мс. В `voice.json` это поля `seq`
+  (фраза → номера кусочков) и `chunks`.
+- Если голос телефона всё-таки читает (запись ещё не скачалась), `forPhoneVoice` в `src/ui/voice.ts`
+  убирает значки, которые он читает по названию: стрелки, ², знак ударения, косые черты.

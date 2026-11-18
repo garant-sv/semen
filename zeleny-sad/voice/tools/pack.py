@@ -1,4 +1,6 @@
-"""Pack the recorded pieces into two MP3 files + index. Usage: pack.py clipsdir public/voice
+"""Pack the recorded pieces into two MP3 files + index. Usage: pack.py clipsdir public/voice [seq.json]
+
+seq.json (from chunks.py): pieces said from chunks; the chunks (keys starting with §) go to pack 1.
 
 Pack 0 holds the sentences without numbers (quests, questions, signs, facts: what a child hears
 first), pack 1 the pieces with numbers (the fair, scores). The game downloads pack 0 first.
@@ -6,7 +8,9 @@ first), pack 1 the pieces with numbers (the fair, scores). The game downloads pa
 import json, sys, os, re, subprocess, hashlib, glob
 
 src, dst = sys.argv[1], sys.argv[2]
+seq = json.load(open(sys.argv[3])) if len(sys.argv) > 3 else {}
 man = json.load(open(f'{src}/manifest.json'))
+chunks, chunk_no = [], {}
 os.makedirs(dst, exist_ok=True)
 blobs = [bytearray(), bytearray()]
 clips = {}
@@ -18,8 +22,13 @@ for u in man:
                         '-c:a', 'libmp3lame', '-b:a', '40k', '-write_xing', '0', '-id3v2_version', '0',
                         '-f', 'mp3', mp3], check=True)
     data = open(mp3, 'rb').read()
-    k = 1 if re.search(r'\d', u['text']) else 0
-    clips[u['key']] = [k, len(blobs[k]), len(data)]
+    chunk = u['key'].startswith('§')
+    k = 1 if chunk or re.search(r'\d', u['text']) else 0
+    if chunk:
+        chunk_no[u['key']] = len(chunks)
+        chunks.append([k, len(blobs[k]), len(data)])
+    else:
+        clips[u['key']] = [k, len(blobs[k]), len(data)]
     blobs[k] += data
 for old in glob.glob(f'{dst}/pack-*'):
     os.remove(old)
@@ -31,5 +40,9 @@ for b in blobs:
     open(f'{dst}/{name}', 'wb').write(b)
     names.append(name)
     print(name, len(b) // 1024, 'KB')
-json.dump({'packs': names, 'clips': clips}, open(f'{dst}/voice.json', 'w'), ensure_ascii=False, separators=(',', ':'))
-print(len(clips), 'pieces')
+index = {'packs': names, 'clips': clips}
+if seq:
+    index['seq'] = {key: [chunk_no[c] for c in cs] for key, cs in seq.items() if key not in clips}
+    index['chunks'] = chunks
+json.dump(index, open(f'{dst}/voice.json', 'w'), ensure_ascii=False, separators=(',', ':'))
+print(len(clips), 'pieces,', len(chunks), 'chunks for', len(index.get('seq', {})), 'more pieces')
