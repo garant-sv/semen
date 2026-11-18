@@ -74,6 +74,18 @@ import {
   water,
   type GameState,
   type GrowthChange,
+  HATS,
+  HAT_NAMES,
+  OUTFITS,
+  PETS,
+  SKINS,
+  START_SEEDS,
+  collectStartSeed,
+  seedLeft,
+  gardenerByDefault,
+  randomGardener,
+  setGardener,
+  type Gardener,
 } from '../game/state';
 import { setTelemetryEnabled, setTelemetryGrade, telemetryEnabled, track, trackQuest } from '../telemetry';
 import {
@@ -89,7 +101,27 @@ import { BADGES, earned, newBadges } from '../game/badges';
 import type { Question } from '../game/quiz';
 import { fairLevel, makeProblem, type MathProblem } from '../game/math';
 import { NO_LETTER, RULES, WORDS, viewWord, type RuleId } from '../game/russian';
-import { ICONS, SHARED_DEFS, decoIcon, fairPicHTML, fingerSVG, gradeIcon, guestArt, guestIcon, listik, medalIcon, meetScene, petalIcon, plantIcon, starIcon } from './art';
+import {
+  ICONS,
+  SHARED_DEFS,
+  decoIcon,
+  fairPicHTML,
+  fingerSVG,
+  gardenerArt,
+  gardenerIcon,
+  gradeIcon,
+  guestArt,
+  guestIcon,
+  hatIcon,
+  listik,
+  medalIcon,
+  meetScene,
+  petArt,
+  petalIcon,
+  plantIcon,
+  seedArt,
+  starIcon,
+} from './art';
 import {
   BOARD,
   PLOTS,
@@ -125,6 +157,10 @@ import {
   slotSVG,
   wateringFx,
   wildSVG,
+  GARDENER_HOME,
+  START_SEED_SPOTS,
+  gardenerSpotNear,
+  walkable,
 } from './scene';
 import { russianVoiceMissing, say, speechText, stopSpeaking, voiceSupported } from './voice';
 import { loadVoicePack } from './voice-pack';
@@ -230,6 +266,10 @@ export class App {
   private collectionTab: 'plants' | 'guests' | 'words' | 'badges' = 'plants';
   /** Which part of the world is shown: the flower garden or the vegetable patch. */
   private view: AreaId = 'garden';
+  /** Where the gardener stands (scene units) and which way they look. */
+  private gd: { x: number; y: number; face: number; walkTimer: number } = { x: GARDENER_HOME.garden.x, y: GARDENER_HOME.garden.y, face: 1, walkTimer: 0 };
+  /** Seeds the gardener is on the way to (hidden at once so a second tap does nothing). */
+  private seedsPicking = new Set<number>();
   private phase: DayPhase = 'day';
   private question: Question | null = null;
   /** The problem of the customer at the front of the queue (kept while the sheet is reopened). */
@@ -268,10 +308,11 @@ export class App {
 <section class="quest" id="quest" aria-live="polite"></section>
 <main class="stage" id="stage">
   <svg id="scene" viewBox="0 0 400 640" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Сад">
-    <g id="view-garden"><g id="l-bg">${backgroundSVG()}</g><g id="l-brook"></g><g id="l-pond"></g><g id="l-bridge"></g><g id="l-board"></g><g id="l-stall"></g><g id="l-sign"></g><g id="l-wild"></g><g id="l-haze"></g><g id="l-objects"></g><g id="l-life"></g></g>
+    <g id="view-garden"><g id="l-bg">${backgroundSVG()}</g><g id="l-brook"></g><g id="l-pond"></g><g id="l-bridge"></g><g id="l-board"></g><g id="l-stall"></g><g id="l-sign"></g><g id="l-wild"></g><g id="l-haze"></g><g id="l-objects"></g><g id="l-life"></g><g id="l-seeds"></g></g>
     <g id="view-veg" style="display:none"><g id="v-bg">${vegBackgroundSVG()}</g><g id="v-sign">${backSignSVG()}</g><g id="v-objects"></g></g>
     ${ZONE_IDS.map((z) => `<g id="view-${z}" style="display:none"><g>${zoneBackgroundSVG(z)}</g><g>${zoneBackSignSVG()}</g><g id="${z}-objects"></g></g>`).join('')}
     <g id="l-guest"></g>
+    <g id="l-gardener" aria-hidden="true"></g>
     <g id="l-front" data-z="near"></g>
     <g id="l-hint"></g>
     <g id="l-sky"></g><g id="l-lights"></g><g id="l-fx"></g>
@@ -415,6 +456,7 @@ export class App {
     if (loaded.status !== 'corrupt') this.persist();
     const quests = done.length ? () => this.showQuestDone(done) : undefined;
     if (loaded.status !== 'corrupt' && !this.state.profile.grade) this.showProfile(true, quests);
+    else if (loaded.status !== 'corrupt' && gardenerByDefault(this.state) && !this.state.gardener) this.showGardener(true, quests);
     else quests?.();
     this.tickTimer = window.setInterval(() => this.refresh(false), 1000);
   }
@@ -528,6 +570,8 @@ export class App {
     this.setLayer('wild', $(this.root, '#l-wild'), wildSVG(progress));
     this.setLayer('haze', $(this.root, '#l-haze'), hazeSVG(progress));
     this.setLayer('life', $(this.root, '#l-life'), lifeSVG(s));
+    this.setLayer('seeds', $(this.root, '#l-seeds'), this.seedsSVG());
+    this.renderGardener();
     this.setLayer('front', $(this.root, '#l-front'), frontSVG(this.view));
     this.setLayer('hint', $(this.root, '#l-hint'), this.fingerHint(now));
     for (let i = 0; i < TOTAL_PLOTS; i++) {
@@ -701,6 +745,8 @@ export class App {
       this.renderQuest();
     }
     if (t.closest('[data-guest]')) return this.onGuest();
+    const seed = t.closest<SVGGElement>('[data-seed]');
+    if (seed && this.mode === 'garden') return this.onSeed(Number(seed.dataset.seed));
     const sign = t.closest<SVGGElement>('[data-sign]');
     if (sign && this.mode === 'garden') return this.showSign(Number(sign.dataset.sign));
     const go = t.closest<SVGGElement>('[data-go]');
@@ -708,8 +754,180 @@ export class App {
     if (slot && this.mode === 'decor') return this.onSlot(Number(slot.dataset.slot));
     if (t.closest('[data-board]') && this.mode === 'garden') return this.showOrderSheet();
     if (t.closest('[data-fair]') && this.mode === 'garden') return this.showFair();
-    if (plot) return this.onPlot(Number(plot.dataset.plot));
+    if (plot) {
+      const i = Number(plot.dataset.plot);
+      const spot = gardenerSpotNear(plotPos(i));
+      this.walkTo(spot.x, spot.y);
+      return this.onPlot(i);
+    }
     if (lm) return this.onLandmark(lm.dataset.landmark as Landmark);
+    // Grass: the gardener walks to where the child tapped.
+    if (this.mode === 'garden' && e instanceof MouseEvent) {
+      const pt = this.scenePoint(e.clientX, e.clientY);
+      if (pt && walkable(pt.x, pt.y)) this.walkTo(pt.x, pt.y);
+    }
+  }
+
+  // ------------------------------------------------------------ gardener
+
+  /** Scene coordinates (viewBox units) of a point on the screen. */
+  private scenePoint(clientX: number, clientY: number): { x: number; y: number } | null {
+    const svg = $(this.root, '#scene') as unknown as SVGSVGElement;
+    const m = svg.getScreenCTM?.();
+    if (!m) return null;
+    const p = new DOMPoint(clientX, clientY).matrixTransform(m.inverse());
+    return { x: p.x, y: p.y };
+  }
+
+  /** The gardener and the pet: the look is drawn once, the position is a CSS transform (so it glides). */
+  private renderGardener() {
+    const g = this.state.gardener;
+    const layer = $(this.root, '#l-gardener');
+    const html = g
+      ? `<g class="gd-pet" data-pet="${g.pet}"><g class="gd-flip">${petArt(g.pet)}</g></g><g class="gd-me"><g class="gd-flip"><g class="gd-body">${gardenerArt(g)}</g></g></g>`
+      : '';
+    this.setLayer('gardener', layer, html);
+    if (g) this.placeGardener();
+  }
+
+  private placeGardener() {
+    const layer = $(this.root, '#l-gardener');
+    const me = layer.querySelector<SVGGElement>('.gd-me');
+    const pet = layer.querySelector<SVGGElement>('.gd-pet');
+    if (!me || !pet) return;
+    const { x, y, face } = this.gd;
+    // The transform attribute keeps the photo right; the style makes the move animate on screen.
+    const at = (el: SVGGElement, px: number, py: number) => {
+      el.setAttribute('transform', `translate(${px.toFixed(1)} ${py.toFixed(1)})`);
+      el.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px)`;
+    };
+    at(me, x, y);
+    at(pet, x - face * 26, y + 3);
+    layer.querySelectorAll<SVGGElement>('.gd-flip').forEach((f) => {
+      f.setAttribute('transform', `scale(${face} 1)`);
+      f.style.transform = `scaleX(${face})`;
+    });
+  }
+
+  /** Walk to a point (instantly when nothing is there yet). Returns how long the walk takes, ms. */
+  private walkTo(x: number, y: number): number {
+    if (!this.state.gardener) return 0;
+    const dist = Math.hypot(x - this.gd.x, y - this.gd.y);
+    if (dist < 4) return 0;
+    if (Math.abs(x - this.gd.x) > 3) this.gd.face = x < this.gd.x ? -1 : 1;
+    this.gd.x = x;
+    this.gd.y = y;
+    const layer = $(this.root, '#l-gardener');
+    const ms = Math.round(Math.min(650, 220 + dist * 1.4));
+    layer.style.setProperty('--walk', `${ms}ms`);
+    layer.classList.add('walking');
+    this.placeGardener();
+    clearTimeout(this.gd.walkTimer);
+    this.gd.walkTimer = window.setTimeout(() => layer.classList.remove('walking'), ms);
+    return ms;
+  }
+
+  /** Put the gardener at the home spot of the current view without walking. */
+  private homeGardener() {
+    const h = GARDENER_HOME[this.view === 'garden' ? 'garden' : 'other'];
+    const layer = $(this.root, '#l-gardener');
+    layer.classList.add('jump');
+    this.gd = { ...this.gd, x: h.x, y: h.y, face: 1 };
+    this.placeGardener();
+    void (layer as unknown as HTMLElement).getBoundingClientRect();
+    window.setTimeout(() => layer.classList.remove('jump'), 50);
+  }
+
+  /** Seeds the wind scattered at the start (only in the garden). */
+  private seedsSVG(): string {
+    return START_SEED_SPOTS.map((p, k) =>
+      !seedLeft(this.state, k)
+        ? ''
+        : `<g class="start-seed" data-seed="${k}" transform="translate(${p.x} ${p.y})" role="button" aria-label="Семечко на траве"><rect x="-22" y="-34" width="44" height="44" fill="transparent"/>${seedArt()}</g>`,
+    ).join('');
+  }
+
+  private onSeed(k: number) {
+    const spot = START_SEED_SPOTS[k];
+    if (!spot || this.seedsPicking.has(k)) return;
+    // Quick taps on several seeds all count: each seed is picked when the gardener gets there.
+    this.seedsPicking.add(k);
+    const ms = this.walkTo(spot.x + (spot.x > 200 ? -20 : 20), spot.y + 4);
+    window.setTimeout(() => {
+      this.seedsPicking.delete(k);
+      const r = collectStartSeed(this.state, k, this.now());
+      if (!r.ok) return;
+      play('harvest');
+      this.fx(burstSVG(spot.x, spot.y - 6, 'magic'));
+      this.floatText(spot.x, spot.y - 40, `+${r.petals}`);
+      this.flyPetals(spot.x, spot.y - 20, r.petals);
+      this.persist();
+      this.render();
+      if (r.left === 0) {
+        track('seeds', { n: START_SEEDS });
+        this.toast('Все семена собраны! Теперь посади ромашку.');
+      }
+    }, Math.max(150, ms - 80));
+  }
+
+  /** «Твой садовник»: choose the look and a pet. First time (3–5 class) it starts the game. */
+  private showGardener(first: boolean, then?: () => void) {
+    const s = this.state;
+    const g: Gardener = s.gardener ? { ...s.gardener } : randomGardener(Math.random);
+    const row = (title: string, items: string[]) =>
+      `<p class="field-title gd-row-title">${title}</p><div class="gd-row" role="group" aria-label="${title}">${items.join('')}</div>`;
+    const btn = (key: string, val: string | number, inner: string, label: string) =>
+      `<button type="button" class="gd-opt" data-k="${key}" data-v="${val}" aria-label="${label}">${inner}</button>`;
+    const html = `<p class="eyebrow">${first ? 'Новый садовник' : 'Мой садовник'}</p><h2>${first ? 'Каким будет твой садовник?' : 'Твой садовник'}</h2>
+<div class="gd-preview" data-preview></div>
+${row('Лицо', SKINS.map((c, i) => btn('skin', i, `<span class="swatch" style="background:${c}"></span>`, `Лицо ${i + 1}`)))}
+${row('Шляпа', HATS.map((h) => btn('hat', h, hatIcon(h, OUTFITS[g.outfit], 46), HAT_NAMES[h])))}
+${row('Одежда', OUTFITS.map((c, i) => btn('outfit', i, `<span class="swatch" style="background:${c}"></span>`, `Цвет ${i + 1}`)))}
+${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p].name)))}
+<div class="gd-actions"><button type="button" class="btn wide" data-act="random">Случайно</button><button type="button" class="btn primary wide big" data-act="ok">${first ? 'В сад!' : 'Готово'}</button></div>`;
+    const sheet = this.openSheet(html, then ? () => window.setTimeout(then, 200) : undefined);
+    sheet.classList.add('gardener-sheet');
+    const sync = () => {
+      $(sheet, '[data-preview]').innerHTML = gardenerIcon(g, 150);
+      sheet.querySelectorAll<HTMLButtonElement>('.gd-opt').forEach((b) => {
+        const on = String(g[b.dataset.k as keyof Gardener]) === b.dataset.v;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', String(on));
+        if (b.dataset.k === 'hat') b.innerHTML = hatIcon(b.dataset.v as Gardener['hat'], OUTFITS[g.outfit], 46);
+      });
+    };
+    sheet.querySelectorAll<HTMLButtonElement>('.gd-opt').forEach((b) =>
+      b.addEventListener('click', () => {
+        const k = b.dataset.k as keyof Gardener;
+        const v = b.dataset.v ?? '';
+        if (k === 'skin' || k === 'outfit') g[k] = Number(v);
+        else if (k === 'hat') g.hat = v as Gardener['hat'];
+        else g.pet = v as Gardener['pet'];
+        play('tap');
+        sync();
+      }),
+    );
+    $(sheet, '[data-act="random"]').addEventListener('click', () => {
+      Object.assign(g, randomGardener(Math.random));
+      play('tap');
+      sync();
+    });
+    $(sheet, '[data-act="ok"]').addEventListener('click', () => {
+      const wasNew = this.state.gardener === null;
+      const r = setGardener(this.state, g, this.now());
+      track('gardener', { first: wasNew, hat: g.hat, pet: g.pet });
+      this.persist();
+      this.closeSheet();
+      play('quest');
+      if (this.view !== 'garden') this.goTo('garden');
+      this.homeGardener();
+      this.render();
+      const hi = this.state.profile.nick ? `${this.state.profile.nick}, ветер` : 'Ветер';
+      if (r.scattered) {
+        window.setTimeout(() => this.toast(`${hi} раскидал семена! Нажми на каждое — садовник соберёт.`), 400);
+      } else if (wasNew) this.toast('Садовник в саду! Нажимай на траву — он пойдёт туда.');
+    });
+    sync();
   }
 
   private onPlot(i: number) {
@@ -818,6 +1036,7 @@ export class App {
     void stage.offsetWidth;
     stage.classList.add('switching');
     this.render();
+    this.homeGardener();
   }
 
   /** Where light shines at night in the current view. */
@@ -1521,6 +1740,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   <label class="toggle"><input type="checkbox" data-act="tilt" ${s.settings.tilt ? 'checked' : ''}><span>Наклон телефона двигает сад</span></label>
   <label class="toggle"><input type="checkbox" data-act="journal" ${telemetryEnabled() ? 'checked' : ''}><span>Помогать улучшать игру</span></label>
   <button type="button" class="btn wide primary" data-act="photo">Сфотографировать сад</button>
+  <button type="button" class="btn wide" data-act="gardener">${s.gardener ? 'Мой садовник' : 'Позвать садовника'}</button>
   <button type="button" class="btn wide" data-act="profile">${s.profile.nick ? `${esc(s.profile.nick)} · ` : ''}${gradeOf(s)} класс — изменить</button>
   <button type="button" class="btn wide" data-act="export">Сохранить резервную копию</button>
   <button type="button" class="btn wide" data-act="import">Загрузить из копии</button>
@@ -1571,6 +1791,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
     });
     $(sheet, '[data-act="about"]').addEventListener('click', () => this.showAbout());
     $(sheet, '[data-act="profile"]').addEventListener('click', () => this.showProfile(false));
+    $(sheet, '[data-act="gardener"]').addEventListener('click', () => this.showGardener(this.state.gardener === null));
     $(sheet, '[data-act="photo"]').addEventListener('click', () => {
       this.closeSheet();
       void this.takePhoto();
@@ -1683,7 +1904,9 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
       this.persist();
       this.closeSheet();
       play('quest');
-      this.toast(this.state.profile.nick ? `Рад знакомству, ${this.state.profile.nick}!` : 'Отлично, начинаем!');
+      // 3–5 class: the gardener sheet comes next, so no «let's go» yet.
+      if (gardenerByDefault(this.state) && !this.state.gardener) window.setTimeout(() => this.showGardener(true), 350);
+      else this.toast(this.state.profile.nick ? `Рад знакомству, ${this.state.profile.nick}!` : 'Отлично, начинаем!');
     });
   }
 

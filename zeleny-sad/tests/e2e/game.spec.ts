@@ -24,7 +24,14 @@ async function onboard(page: Page, nick = '') {
   if (nick) await page.getByPlaceholder('Например, Сёма').fill(nick);
   await page.getByRole('button', { name: /^4\s*класс/ }).click();
   await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await makeGardener(page);
   await expect(page.locator('#sheetBackdrop')).toBeHidden();
+}
+
+/** 3–5 class: right after the class the child makes a gardener (here: the random look as offered). */
+async function makeGardener(page: Page) {
+  await expect(page.getByRole('heading', { name: 'Каким будет твой садовник?' })).toBeVisible();
+  await page.getByRole('button', { name: 'В сад!' }).click();
 }
 
 async function start(page: Page) {
@@ -746,4 +753,64 @@ test('2–3 class: hint finger after a quiet moment, fair problem with a picture
   await expect(page.locator('.answers.with-pics .answer .pic')).toHaveCount(3);
   await page.waitForTimeout(400);
   await shots(page, '27-quiz-pics');
+});
+
+test('3–5 class: own gardener, seeds scattered at the start, the gardener walks; 2 class keeps Listik', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-01T10:00:00') });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^4\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await expect(page.getByRole('heading', { name: 'Каким будет твой садовник?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Панама с цветком' }).click();
+  await page.getByRole('button', { name: 'Пчела' }).click();
+  await expect(page.getByRole('button', { name: 'Пчела' })).toHaveAttribute('aria-pressed', 'true');
+  await shots(page, '30-gardener-creator');
+  await page.getByRole('button', { name: 'В сад!' }).click();
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+  await noGuests(page);
+  await expect(page.locator('#l-gardener .gd-me')).toHaveCount(1);
+  await expect(page.locator('#l-gardener .gd-pet')).toHaveAttribute('data-pet', 'bee');
+  await expect(page.locator('[data-seed]')).toHaveCount(3);
+  await expect(page.locator('.toast').last()).toContainText('Ветер раскидал семена');
+  await shots(page, '31-gardener-seeds');
+
+  // A seed: the gardener walks over and picks it up.
+  const before = await page.locator('#l-gardener .gd-me').getAttribute('transform');
+  await page.locator('[data-seed="0"]').click();
+  await expect(page.locator('[data-seed]')).toHaveCount(2);
+  expect(await page.locator('#l-gardener .gd-me').getAttribute('transform')).not.toBe(before);
+  for (const k of [1, 2]) await page.locator(`[data-seed="${k}"]`).click();
+  await expect(page.locator('[data-seed]')).toHaveCount(0);
+  await expect(page.locator('#petals')).toHaveText('6');
+  await expect(page.locator('.toast').last()).toContainText('Все семена собраны');
+
+  // Tapping a bed sends the gardener beside it; the bed still works at once.
+  await page.locator('[data-plot="0"]').click();
+  await expect(page.getByRole('heading', { name: /семена|Что посадим/i }).first()).toBeVisible();
+  await expect(page.locator('#l-gardener .gd-me')).toHaveAttribute('transform', 'translate(130.0 470.0)');
+  await page.locator('.sheet-close').click();
+  await shots(page, '32-gardener-bed');
+
+  // Saved, and can be changed from the Menu without scattering seeds again.
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('green-garden/save')!));
+  expect(saved.gardener).toMatchObject({ hat: 'panama', pet: 'bee' });
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Мой садовник' }).click();
+  await page.getByRole('button', { name: 'Кепка' }).click();
+  await page.getByRole('button', { name: 'Готово' }).click();
+  await expect(page.locator('[data-seed]')).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('green-garden/save')!).gardener.hat)).toBe('cap');
+});
+
+test('2 class: no gardener sheet at the start (Listik leads), but one can be called from the Menu', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-01T10:00:00') });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+  await page.waitForTimeout(600);
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+  await expect(page.locator('#l-gardener .gd-me')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await expect(page.getByRole('button', { name: 'Позвать садовника' })).toBeVisible();
 });

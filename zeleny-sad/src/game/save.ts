@@ -7,7 +7,22 @@ import { QUESTIONS, type Grade } from './quiz';
 import { WORDS } from './russian';
 
 const WORD_IDS = WORDS.map((w) => w.id);
-import { SAVE_VERSION, cleanNick, emptyPlot, newGame, type GameState, type Order, type Plot } from './state';
+import {
+  HATS,
+  OUTFITS,
+  PETS,
+  SAVE_VERSION,
+  SKINS,
+  ALL_START_SEEDS,
+  cleanNick,
+  emptyPlot,
+  newGame,
+  type GameState,
+  type Hat,
+  type Order,
+  type Pet,
+  type Plot,
+} from './state';
 
 export const SAVE_KEY = 'green-garden/save';
 export const PREV_KEY = 'green-garden/save-prev';
@@ -67,7 +82,8 @@ type Raw = Record<string, unknown>;
  * v5 — natural zones (tundra, taiga, steppe): 9 more plots, restored.<zone>.
  * v6 — «Ярмарка урожая» (fair: queue, lastAt, solved, firstTry).
  * v7 — «Таблички у грядок» (plot.sign, rus).
- * v8 — current: player profile (nickname and school class).
+ * v8 — player profile (nickname and school class).
+ * v9 — current: the player's gardener (look and pet) and the seeds scattered at the start.
  */
 export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
   1: (raw) => {
@@ -123,6 +139,7 @@ export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
   5: (raw) => ({ ...raw, version: 6, fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 } }),
   6: (raw) => ({ ...raw, version: 7, rus: { learned: [], correct: 0, total: 0 } }),
   7: (raw) => ({ ...raw, version: 8, profile: { nick: '', grade: null } }),
+  8: (raw) => ({ ...raw, version: 9, gardener: null, startSeeds: 0 }),
 };
 
 export function migrate(raw: Raw): { data: Raw; from: number } {
@@ -242,6 +259,16 @@ export function sanitize(raw: Raw, now: number): GameState {
     nick: typeof profile.nick === 'string' ? cleanNick(profile.nick) : '',
     grade: [2, 3, 4, 5].includes(profile.grade as number) ? (profile.grade as Grade) : null,
   };
+  const g = isObj(raw.gardener) ? raw.gardener : null;
+  s.gardener = g
+    ? {
+        skin: Math.floor(num(g.skin, 0, 0, SKINS.length - 1)),
+        hat: HATS.includes(g.hat as Hat) ? (g.hat as Hat) : 'straw',
+        outfit: Math.floor(num(g.outfit, 0, 0, OUTFITS.length - 1)),
+        pet: PETS.includes(g.pet as Pet) ? (g.pet as Pet) : 'hedgehog',
+      }
+    : null;
+  s.startSeeds = Math.floor(num(raw.startSeeds, 0, 0, ALL_START_SEEDS));
   const rus = isObj(raw.rus) ? raw.rus : {};
   s.rus = {
     learned: Array.isArray(rus.learned) ? [...new Set(rus.learned.filter((w): w is string => WORD_IDS.includes(w as string)))] : [],
