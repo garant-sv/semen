@@ -192,6 +192,39 @@ test('works offline after the first load', async ({ page, context, browserName }
   await context.setOffline(false);
 });
 
+test('a new version switches on by itself once nothing is open on screen', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Playwright WebKit does not run service workers reliably; checked in Chromium.');
+  const fs = await import('node:fs');
+  const swPath = new URL('../../dist/sw.js', import.meta.url);
+  const original = fs.readFileSync(swPath, 'utf8');
+  try {
+    await page.goto('/');
+    await onboard(page);
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+      if (!navigator.serviceWorker.controller) {
+        await new Promise((r) => navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }));
+      }
+    });
+    // The Menu shows which version is running.
+    await page.locator('[data-nav="menu"]').click();
+    await expect(page.locator('.app-version')).toContainText(/Версия игры 0\.\d+\.\d+/);
+    // A new version appears on the server while a card is open.
+    await page.evaluate(() => ((window as unknown as { __old: boolean }).__old = true));
+    fs.writeFileSync(swPath, original + '\n// next version\n');
+    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())!.update());
+    await page.waitForTimeout(3000);
+    // Not while the child is in a card...
+    expect(await page.evaluate(() => (window as unknown as { __old?: boolean }).__old)).toBe(true);
+    // ...but as soon as it is closed.
+    await page.locator('.sheet-close').click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __old?: boolean }).__old ?? false), { timeout: 10_000 }).toBe(false);
+    await expect(page.locator('.quest-title')).toBeVisible();
+  } finally {
+    fs.writeFileSync(swPath, original);
+  }
+});
+
 test('restored garden renders bridge, pond and decorations', async ({ page }) => {
   const now = Date.now();
   const save = {
