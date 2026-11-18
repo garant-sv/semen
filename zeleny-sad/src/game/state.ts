@@ -141,6 +141,8 @@ export interface GameState {
     bigText: boolean | null;
     /** Listik reads aloud: null = by class (on for 2–3 class), or the player's own choice. */
     voice: boolean | null;
+    /** «Тихо»: one tap on the screen silences everything (sounds and Listik), e.g. at a lesson. */
+    muted: boolean;
   };
 }
 
@@ -174,7 +176,7 @@ export function newGame(now: number): GameState {
     profile: { nick: '', grade: null },
     gardener: null,
     startSeeds: 0,
-    settings: { sound: true, tilt: true, bigText: null, voice: null },
+    settings: { sound: true, tilt: true, bigText: null, voice: null, muted: false },
   };
 }
 
@@ -475,7 +477,13 @@ export function nextTap(s: GameState, now: number, area: AreaId): number | null 
 }
 
 /** Listik reads aloud by class unless the player switched it in the Menu. */
-export const voiceOn = (s: GameState): boolean => s.settings.voice ?? youngMode(s);
+export const voiceWanted = (s: GameState): boolean => s.settings.voice ?? youngMode(s);
+
+/** Listik actually reads: wanted, and the quick «Тихо» button is not pressed. */
+export const voiceOn = (s: GameState): boolean => !s.settings.muted && voiceWanted(s);
+
+/** Game sounds actually play: on in the Menu, and the quick «Тихо» button is not pressed. */
+export const soundOn = (s: GameState): boolean => s.settings.sound && !s.settings.muted;
 
 export function setProfile(s: GameState, nick: string, grade: Grade, now: number) {
   s.profile = { nick: cleanNick(nick), grade };

@@ -57,6 +57,8 @@ import {
   gradeOf,
   bigTextOn,
   voiceOn,
+  voiceWanted,
+  soundOn,
   youngMode,
   nextTap,
   setProfile,
@@ -303,7 +305,10 @@ export class App {
 <header class="hud">
   <div class="petals" id="petalsBox" aria-label="Лепестки">${petalIcon(26)}<b id="petals">0</b></div>
   <h1 class="title">Зелёный сад</h1>
-  <button class="listik-btn" id="listikBtn" type="button" aria-label="Листик: задание">${listik(46)}</button>
+  <div class="hud-right">
+    <button class="mute-btn" id="muteBtn" type="button" aria-pressed="false" aria-label="Выключить звук">${ICONS.speaker}<svg class="mute-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4Z" fill="currentColor"/><path d="M15.5 9.5l5 5M20.5 9.5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    <button class="listik-btn" id="listikBtn" type="button" aria-label="Листик: задание">${listik(46)}</button>
+  </div>
 </header>
 <section class="quest" id="quest" aria-live="polite"></section>
 <main class="stage" id="stage">
@@ -363,6 +368,7 @@ export class App {
       },
       { capture: true, passive: true },
     );
+    $(this.root, '#muteBtn').addEventListener('click', () => this.toggleMute());
     // The speaker button: the first tap reads, a tap while Listik reads stops him.
     onVoiceIdle(() => this.markSpeaking(null));
     this.root.addEventListener('click', (e) => {
@@ -430,7 +436,7 @@ export class App {
   }
 
   private afterLoad(loaded: LoadResult) {
-    setSoundEnabled(this.state.settings.sound);
+    setSoundEnabled(soundOn(this.state));
     void this.startTilt(false);
     this.applyTextSize();
     this.prepareVoice();
@@ -559,6 +565,7 @@ export class App {
     const progress = gardenProgress(s);
     if (!this.flying) this.shownPetals = s.petals;
     this.applyTextSize();
+    this.renderMute();
     $(this.root, '#petals').textContent = String(this.shownPetals);
     this.setLayer('brook', $(this.root, '#l-brook'), brookSVG(s.restored.pond));
     this.setLayer('board', $(this.root, '#l-board'), boardSVG(s));
@@ -1741,7 +1748,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
     const sheet = this.openSheet(`<h2>Меню</h2>${status}
 <div class="menu-list">
   <label class="toggle"><input type="checkbox" data-act="sound" ${s.settings.sound ? 'checked' : ''}><span>Звук</span></label>
-  ${voiceSupported() ? `<label class="toggle"><input type="checkbox" data-act="voice" ${voiceOn(s) ? 'checked' : ''}><span>Листик читает вслух</span></label>` : ''}
+  ${voiceSupported() ? `<label class="toggle"><input type="checkbox" data-act="voice" ${voiceWanted(s) ? 'checked' : ''}><span>Листик читает вслух</span></label>` : ''}
   <label class="toggle"><input type="checkbox" data-act="bigtext" ${bigTextOn(s) ? 'checked' : ''}><span>Крупный текст</span></label>
   <label class="toggle"><input type="checkbox" data-act="tilt" ${s.settings.tilt ? 'checked' : ''}><span>Наклон телефона двигает сад</span></label>
   <label class="toggle"><input type="checkbox" data-act="journal" ${telemetryEnabled() ? 'checked' : ''}><span>Помогать улучшать игру</span></label>
@@ -1756,13 +1763,18 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
 <p class="muted small">Резервная копия — это файл. Сохрани его в «Файлы» и загрузи, если игра потеряется или ты сменишь телефон.</p>`);
     $<HTMLInputElement>(sheet, '[data-act="sound"]').addEventListener('change', (e) => {
       this.state.settings.sound = (e.target as HTMLInputElement).checked;
-      setSoundEnabled(this.state.settings.sound);
+      if (this.state.settings.sound) this.state.settings.muted = false;
+      setSoundEnabled(soundOn(this.state));
+      this.renderMute();
       play('tap');
       this.persist();
     });
     sheet.querySelector<HTMLInputElement>('[data-act="voice"]')?.addEventListener('change', (e) => {
       const on = (e.target as HTMLInputElement).checked;
       this.state.settings.voice = on;
+      if (on) this.state.settings.muted = false;
+      setSoundEnabled(soundOn(this.state));
+      this.renderMute();
       this.persist();
       this.renderQuest();
       if (!on) return stopSpeaking();
@@ -1828,6 +1840,30 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   /** Read aloud right away (called from a tap, which phones require for speech). */
   private autoSay(html: string) {
     if (voiceOn(this.state) && say(html, youngMode(this.state))) this.markSpeaking(speechText(html));
+  }
+
+  /** «Тихо»: one tap silences the game (sounds and Listik); another tap brings them back. */
+  private toggleMute() {
+    const s = this.state;
+    s.settings.muted = !s.settings.muted;
+    if (s.settings.muted) stopSpeaking();
+    setSoundEnabled(soundOn(s));
+    if (!s.settings.muted) {
+      play('tap');
+      this.prepareVoice();
+    }
+    this.renderMute();
+    this.renderQuest();
+    this.persist();
+    this.toast(s.settings.muted ? 'Звук выключен. Включить снова — та же кнопка.' : 'Звук включён.');
+  }
+
+  private renderMute() {
+    const b = $(this.root, '#muteBtn');
+    const m = this.state.settings.muted;
+    b.classList.toggle('muted', m);
+    b.setAttribute('aria-pressed', String(m));
+    b.setAttribute('aria-label', m ? 'Включить звук' : 'Выключить звук');
   }
 
   /** Show which speaker buttons are reading now (their text), so a tap on them stops Listik. */
@@ -1998,7 +2034,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
         const sheet = this.openSheet(`<h2>Загрузить копию?</h2><p>В копии: ${petalsWord(state.petals)}, растений в коллекции — ${found}, задание ${Math.min(state.questIndex + 1, QUESTS.length)} из ${QUESTS.length}.</p><p class="muted">Текущий сад будет заменён.</p><button type="button" class="btn primary wide" data-act="yes">Загрузить</button><button type="button" class="btn wide" data-act="no">Отмена</button>`);
         $(sheet, '[data-act="yes"]').addEventListener('click', () => {
           this.state = state;
-          setSoundEnabled(state.settings.sound);
+          setSoundEnabled(soundOn(state));
           void this.startTilt(false);
           this.mode = 'garden';
           this.selectedDeco = null;

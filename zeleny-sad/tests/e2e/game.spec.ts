@@ -756,6 +756,44 @@ test('a tap while Listik reads stops him; a tap before the recording arrives wai
 });
 });
 
+test('«Тихо»: one tap on the screen silences Listik and the sounds, and it is remembered', async ({ page }) => {
+  await page.addInitScript(() => {
+    const log: string[] = [];
+    (window as unknown as { __log: string[] }).__log = log;
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: { speaking: false, pending: false, getVoices: () => [], speak: () => log.push('speak'), cancel: () => log.push('cancel') },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await expect(page.locator('#quest .speak')).toBeVisible();
+  const mute = page.locator('#muteBtn');
+  const box = (await mute.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  // Listik's button stays fully on screen next to it, even on the narrowest phones.
+  const lb = (await page.locator('#listikBtn').boundingBox())!;
+  expect(lb.x + lb.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+
+  await page.locator('#quest .speak').click(); // Listik starts reading…
+  await mute.click(); // …and the teacher looks: one tap, quiet.
+  await expect(mute).toHaveAttribute('aria-pressed', 'true');
+  await expect(mute).toHaveAttribute('aria-label', 'Включить звук');
+  await expect(page.locator('#quest .speak')).toHaveCount(0);
+  await shots(page, '29-muted');
+  await page.reload();
+  await expect(page.locator('#muteBtn')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#quest .speak')).toHaveCount(0);
+  // The Menu still shows what was chosen there; another tap on the button brings the sound back.
+  await page.locator('#muteBtn').click();
+  await expect(page.locator('#muteBtn')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#quest .speak')).toBeVisible();
+});
+
 test('2–3 class: hint finger after a quiet moment, fair problem with a picture, quiz with pictures', async ({ page }) => {
   const now = new Date('2026-11-01T12:00:00').getTime();
   await page.clock.install({ time: now });
