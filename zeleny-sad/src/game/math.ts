@@ -60,8 +60,8 @@ const FRACTIONS: Record<number, [string, string]> = {
   5: ['пятая часть', 'пятую часть'],
 };
 
-/** Level range by school class: the 2nd grade stays easy, the 5th starts with big numbers. */
-export const LEVELS_BY_GRADE: Record<number, [number, number]> = { 2: [1, 1], 3: [1, 2], 4: [1, 4], 5: [3, 4] };
+/** Level range by school class: the 2nd grade stays easy, the 5th starts one step up. */
+export const LEVELS_BY_GRADE: Record<number, [number, number]> = { 2: [1, 1], 3: [1, 2], 4: [1, 4], 5: [2, 4] };
 
 /** Level from the number of solved problems, kept within the class's range. */
 export const fairLevel = (solved: number, grade = 4) => {
@@ -165,15 +165,36 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
   const L = Math.max(1, Math.min(4, level));
   const k: MathKind = kind ?? pick(KINDS_BY_LEVEL[L]);
   const good = pick(FAIR_GOODS);
-  // Prices and amounts grow with the level (4th grade: multiplying by two-digit numbers).
-  const price = () => (L === 1 ? int(good.price[0], good.price[1]) : L === 2 ? int(6, 25) : L === 3 ? int(12, 45) : int(25, 99));
-  const count = () => (L === 1 ? int(2, 5) : L === 2 ? int(3, 9) : L === 3 ? int(11, 25) : int(12, 48));
-  const side = () => (L === 1 ? int(2, 6) : L === 2 ? int(3, 9) : L === 3 ? int(8, 25) : int(12, 40));
+  // Numbers follow the programme for mental arithmetic (ФРП НОО «Математика»): within 100 in
+  // the head; bigger numbers only when the problem reduces to the times table (40 × 7, 250 : 50).
+  // Long multiplication and division by a two-digit number are written work and stay out:
+  // the fair has an answer field and no paper.
+  //   L1 — small numbers; L2 — the times table and «внетабличное» within 100 (3rd grade);
+  //   L3 — round tens × a digit; L4 — round tens and hundreds × a digit.
+  const tens = (a: number, b: number) => int(a, b) * 10;
+  /** Price and amount of one purchase. */
+  const buy = (): [number, number] => {
+    if (L === 1) return [int(good.price[0], good.price[1]), int(2, 5)];
+    if (L === 2) {
+      // The times table, or «внетабличное» within 100 (24 × 4 = 96). Prices 6–25 and amounts 3–9,
+      // as before: Listik's recorded voice has these phrases.
+      if (rand() < 0.5) return [int(6, 9), int(3, 9)];
+      const n = int(3, 4);
+      return [int(11, Math.min(25, Math.floor(99 / n))), n];
+    }
+    if (L === 3) return [tens(1, 9), int(2, 9)];
+    return rand() < 0.5 ? [tens(2, 9), int(3, 9)] : [int(1, 4) * 100, int(2, 9)];
+  };
+  /** Sides of a bed: a digit by a digit, or a digit by round tens. */
+  const sides = (): [number, number] => {
+    if (L === 1) return [int(2, 6), int(2, 6)];
+    if (L === 2) return [int(3, 9), int(3, 9)];
+    return [int(2, 9), L === 3 ? tens(1, 5) : tens(2, 9)];
+  };
 
   switch (k) {
     case 'cost': {
-      const n = count();
-      const p = price();
+      const [p, n] = buy();
       return {
         kind: k,
         text: `${who}: «Мне, пожалуйста, ${n} ${plural(n, good.forms)} по ${perPet(p)} за штуку. Сколько с меня?»`,
@@ -185,11 +206,13 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
       };
     }
     case 'change': {
-      const n = count();
-      const p = price();
+      const [p, n] = buy();
       const cost = n * p;
+      // Paid in round money: tens up to 100 (L1–2), then round hundreds.
       const step = L <= 2 ? 10 : 100;
-      const paid = (Math.floor(cost / step) + int(1, 3)) * step;
+      const first = Math.floor(cost / step) + 1;
+      const last = L <= 2 && cost < 100 ? Math.max(first, Math.min(first + 2, 100 / step)) : first + 2;
+      const paid = int(first, last) * step;
       return {
         kind: k,
         text: `${who}: «Возьму ${n} ${plural(n, good.forms)} по ${perPet(p)}. Вот ${pet(paid)}. Сколько сдачи?»`,
@@ -201,9 +224,12 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
       };
     }
     case 'canBuy': {
-      const p = price();
-      const n = count();
-      const rest = int(0, p - 1);
+      // Division with a remainder: by a digit within 100 (3rd grade), later by round tens or
+      // hundreds with round money, so 250 : 30 is really 25 : 3.
+      const [p, n0] = L <= 2 ? [int(6, 9), int(3, 9)] : buy();
+      const n = Math.max(3, n0);
+      const unit = p >= 100 ? 100 : p >= 10 ? 10 : 1;
+      const rest = int(0, p / unit - 1) * unit;
       const money = n * p + rest;
       return {
         kind: k,
@@ -216,7 +242,11 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
     }
     case 'share': {
       const friends = L <= 2 ? int(3, 5) : int(3, 9);
-      const each = L <= 2 ? int(3, 12) : int(12, 99);
+      // L3: within 100 (96 : 4) or round tens (240 : 4); L4: round tens or hundreds, under 1000 (600 : 3).
+      const each =
+        L <= 2 ? int(3, 12)
+        : L === 3 ? (rand() < 0.5 ? int(11, Math.max(11, Math.floor(99 / friends))) : tens(1, 9))
+        : rand() < 0.5 ? tens(2, 9) : int(1, Math.floor(9 / friends)) * 100;
       const total = friends * each;
       return {
         kind: k,
@@ -228,8 +258,7 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
       };
     }
     case 'area': {
-      const a = side();
-      const b = side();
+      const [a, b] = sides();
       return {
         kind: k,
         text: `${who}: «Хочу новую грядку: длина ${a} м, ширина ${b} м. Какая у неё будет площадь?»`,
@@ -241,8 +270,8 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
       };
     }
     case 'perimeter': {
-      const a = side();
-      const b = side();
+      // Adding the sides and doubling: two-digit sides are fine here.
+      const [a, b] = L <= 2 ? sides() : [int(10, L === 3 ? 30 : 45), int(5, 25)];
       return {
         kind: k,
         text: `${who}: «Надо огородить грядку ${a} м на ${b} м заборчиком. Сколько метров заборчика нужно?»`,
@@ -254,9 +283,10 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
       };
     }
     case 'bushes': {
-      const a = int(3, L >= 4 ? 15 : 9);
-      const b = int(2, L >= 4 ? 12 : 8);
-      const per = int(2, 6);
+      // The area from the times table, then × a digit, all within 100.
+      const a = int(3, 9);
+      const b = int(2, Math.min(8, Math.floor(50 / a)));
+      const per = pick([2, 3, 4, 5, 6].filter((x) => a * b * x <= 100));
       return {
         kind: k,
         text: `${who}: «На 1 м² сажают ${per} ${plural(per, ['куст', 'куста', 'кустов'])} клубники. Сколько кустов поместится на грядке ${a} м на ${b} м?»`,
@@ -280,7 +310,8 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
     }
     case 'fraction': {
       const d = L === 1 ? 2 : int(2, 5);
-      const part = L <= 2 ? int(2, 12) : int(8, 60);
+      // L3: the whole within 100; L4: round tens (350 : 5).
+      const part = L <= 2 ? int(2, 12) : L === 3 ? int(5, Math.floor(100 / d)) : tens(2, 9);
       const total = d * part;
       const [, acc] = FRACTIONS[d];
       return {
@@ -294,7 +325,8 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
     }
     case 'distance': {
       const v = int(2, L <= 2 ? 5 : 9);
-      const t = L === 1 ? int(3, 10) : L === 2 ? int(6, 20) : int(12, 60);
+      // L2: within 100; L3–4: round tens of seconds (7 × 40).
+      const t = L === 1 ? int(3, 10) : L === 2 ? int(6, Math.floor(100 / v)) : tens(1, L === 3 ? 6 : 9);
       return {
         kind: k,
         text: `${who}: «Загадка! Заяц бежит ${v} м в секунду. Сколько метров он пробежит за ${t} ${plural(t, ['секунду', 'секунды', 'секунд'])}?»`,
