@@ -1086,6 +1086,11 @@ ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p
     return sheet;
   }
 
+  /** True when nothing is open on top of the garden, so the game may restart itself to update. */
+  isIdle(): boolean {
+    return $(this.root, '#sheetBackdrop').hidden;
+  }
+
   closeSheet() {
     const back = $(this.root, '#sheetBackdrop');
     if (back.hidden) return;
@@ -1760,7 +1765,8 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   <button type="button" class="btn wide ghost" data-act="about">Об игре</button>
   <button type="button" class="btn wide danger" data-act="reset">Начать сад заново</button>
 </div>
-<p class="muted small">Резервная копия — это файл. Сохрани его в «Файлы» и загрузи, если игра потеряется или ты сменишь телефон.</p>`);
+<p class="muted small">Резервная копия — это файл. Сохрани его в «Файлы» и загрузи, если игра потеряется или ты сменишь телефон.</p>
+<p class="muted small app-version">Версия игры ${__APP_VERSION__}</p>`);
     $<HTMLInputElement>(sheet, '[data-act="sound"]').addEventListener('change', (e) => {
       this.state.settings.sound = (e.target as HTMLInputElement).checked;
       if (this.state.settings.sound) this.state.settings.muted = false;
