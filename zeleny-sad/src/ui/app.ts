@@ -257,6 +257,9 @@ export class App {
   private sheetOnClose: (() => void) | null = null;
   /** The open sheet must be answered: no close button, a tap outside does nothing. */
   private sheetLocked = false;
+  /** Garden news waiting for the open window to close (see announce). */
+  private pendingNews: string[] = [];
+  private newsTimer = 0;
   private tickTimer = 0;
   private hiddenAt = 0;
   private tipIndex = 0;
@@ -508,17 +511,17 @@ export class App {
     this.persist();
     this.render();
     if (done.length) window.setTimeout(() => this.showQuestDone(done), 650);
-    if (quiz) window.setTimeout(() => this.toast('У Листика есть вопрос для тебя! Нажми на Листика вверху.'), done.length ? 1600 : 500);
-    for (const b of badges) window.setTimeout(() => this.toast(`Новый значок: «${b.name}»!`), 900);
+    if (quiz) window.setTimeout(() => this.announce('У Листика есть вопрос для тебя! Нажми на Листика вверху.'), done.length ? 1600 : 500);
+    for (const b of badges) window.setTimeout(() => this.announce(`Новый значок: «${b.name}»!`), 900);
     if (fairOpened) {
       window.setTimeout(() => {
-        this.toast('Листик: у забора открылась Ярмарка урожая! К прилавку приходят покупатели — помоги им посчитать.');
+        this.announce('Листик: у забора открылась Ярмарка урожая! К прилавку приходят покупатели — помоги им посчитать.');
         this.fx(ringFx(STALL.x, STALL.y - 40, '#FFF3B8', 40));
       }, done.length ? 2200 : 600);
     }
     if (newOrder && this.state.ordersDone === 0) {
       window.setTimeout(() => {
-        this.toast('Листик: на доске у пруда появилась первая просьба от гостя! Загляни.');
+        this.announce('Листик: на доске у пруда появилась первая просьба от гостя! Загляни.');
         this.fx(ringFx(BOARD.x, BOARD.y - 40, '#FFF3B8', 34));
       }, done.length ? 1400 : 300);
     }
@@ -549,8 +552,8 @@ export class App {
   private welcomeBack(changes: GrowthChange[]) {
     if (!changes.length) return;
     const bloomed = [...new Set(changes.filter((c) => c.stage === 3).map((c) => PLANTS[c.plant].name))];
-    if (bloomed.length) this.toast(`Пока тебя не было, расцвели: ${bloomed.join(', ')}.`);
-    else this.toast('Пока тебя не было, растения подросли и ждут полива.');
+    if (bloomed.length) this.announce(`Пока тебя не было, расцвели: ${bloomed.join(', ')}.`);
+    else this.announce('Пока тебя не было, растения подросли и ждут полива.');
   }
 
   // ------------------------------------------------------------ rendering
@@ -658,7 +661,7 @@ export class App {
     if (cur.stage === 3 && p.golden) {
       play('golden');
       this.fx(burstSVG(x, y, 'magic'));
-      this.toast(`Ого! Расцвёл золотой цветок: ${PLANTS[cur.plant].name}!`);
+      this.announce(`Ого! Расцвёл золотой цветок: ${PLANTS[cur.plant].name}!`);
     } else play('pop');
   }
 
@@ -1104,6 +1107,7 @@ ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p
     back.hidden = true;
     this.sheetLocked = false;
     stopSpeaking();
+    this.flushNews();
     $(this.root, '#sheet').innerHTML = '';
     const cb = this.sheetOnClose;
     this.sheetOnClose = null;
@@ -1136,7 +1140,7 @@ ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p
           this.animate(`plot-${plot}`, 'anim-plant', 900);
           const signs = this.state.plots.filter((x) => x.sign).length;
           if (this.state.plots[plot].sign && this.state.rus.total === 0 && signs === 1) {
-            window.setTimeout(() => this.toast('Листик: у грядки появилась табличка, но в слове пропущена буква. Нажми на табличку!'), 900);
+            window.setTimeout(() => this.announce('Листик: у грядки появилась табличка, но в слове пропущена буква. Нажми на табличку!'), 900);
           }
         } else this.toast(r.reason, 'warn');
       }),
@@ -2066,6 +2070,31 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   }
 
   // ------------------------------------------------------------ feedback
+
+  /**
+   * News from the garden (a badge, a question from Listik, the fair has opened…). While a window is
+   * open it waits and comes after it is closed, so it never covers the window's title and close button.
+   */
+  announce(text: string) {
+    if (!$(this.root, '#sheetBackdrop').hidden) {
+      if (!this.pendingNews.includes(text)) this.pendingNews.push(text);
+      return;
+    }
+    this.toast(text);
+  }
+
+  /** Show the news that waited for a window, one by one, once no window is open. */
+  private flushNews() {
+    window.clearTimeout(this.newsTimer);
+    if (!this.pendingNews.length) return;
+    this.newsTimer = window.setTimeout(() => {
+      // Another window may have opened right after (a finished quest): wait for that one too.
+      if (!$(this.root, '#sheetBackdrop').hidden) return;
+      const text = this.pendingNews.shift();
+      if (text) this.toast(text);
+      if (this.pendingNews.length) this.flushNews();
+    }, 900);
+  }
 
   toast(text: string, kind: 'info' | 'warn' = 'info') {
     const box = $(this.root, '#toasts');
