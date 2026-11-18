@@ -25,16 +25,18 @@ def num(n: int, case='nom', gender='m') -> str:
     """case: nom, acc, gen, dat, prep. gender: m, f, n."""
     if n >= 1000:
         th, rest = divmod(n, 1000)
-        if case in ('nom', 'acc'):
-            w = num(th, 'nom', 'f')
-            m10, m100 = th % 10, th % 100
-            t = 'тысяча' if m10 == 1 and m100 != 11 else 'тысячи' if 2 <= m10 <= 4 and not 12 <= m100 <= 14 else 'тысяч'
-            if case == 'acc' and t == 'тысяча':
-                t = 'тысячу'
-                w = w.replace('одна', 'одну')
-            head = f'{w} {t}'
-        else:
-            head = f'{num(th, case, "f")} тысяч'  # enough for this game (never used)
+        m10, m100 = th % 10, th % 100
+        one = m10 == 1 and m100 != 11
+        few = 2 <= m10 <= 4 and not 12 <= m100 <= 14
+        # «тысяча» is a feminine noun: тысяча / тысячи / тысяч, тысячи / тысяч, тысяче / тысячам, тысяче / тысячах.
+        forms = {
+            'nom': ('тысяча', 'тысячи', 'тысяч'), 'acc': ('тысячу', 'тысячи', 'тысяч'),
+            'gen': ('тысячи', 'тысяч', 'тысяч'), 'dat': ('тысяче', 'тысячам', 'тысячам'),
+            'prep': ('тысяче', 'тысячах', 'тысячах'),
+        }[case]
+        t = forms[0] if one else forms[1] if few else forms[2]
+        # «1 500» is said «тысяча пятьсот», not «одна тысяча пятьсот».
+        head = t if th == 1 else f'{num(th, case, "f")} {t}'
         return head if rest == 0 else f'{head} {num(rest, case, gender)}'
     if n == 0:
         return {'nom': 'ноль', 'acc': 'ноль', 'gen': 'ноля', 'dat': 'нолю', 'prep': 'ноле'}[case]
@@ -114,6 +116,9 @@ PHRASES = {
 UNITS_DAT = {'м²': ('квадратному метру', 'квадратным метрам'), 'м': ('метру', 'метрам'), 'мин': ('минуте', 'минутам')}
 
 
+ACC_AFTER = {'Возьму', 'возьму', 'пожалуйста,', 'Собери', 'собери', 'ярмарке', 'сажают', 'за', 'на', 'На', 'купить', 'куплю'}
+
+
 def spell(text: str) -> str:
     t = PHRASES.get(text, text)
     # «равно 16 м» → «равно шестнадцати метрам».
@@ -159,7 +164,13 @@ def spell(text: str) -> str:
     # «по 21 лепестку» (dative), «по 3 лепестка».
     t = re.sub(r'\bпо (\d+) (лепестку)', lambda m: f'по {(num(int(m[1]) - 1) + " ") if int(m[1]) > 1 else ""}одному {m[2]}', t)
     # Number before a noun: gender from the noun, accusative = nominative except «одну».
-    t = re.sub(r'(\d+) ([А-Яа-яЁё]+)', lambda m: f'{num(int(m[1]), "acc", gender_of(m[2]))} {m[2]}', t)
+    # Accusative only after a verb or preposition that takes it («Возьму тысячу одну тыкву»,
+    # «заработали на ярмарке тысячу лепестков»); otherwise nominative («Вот тысяча лепестков», «стоит одна»).
+    def before_noun(m):
+        prev = t[:m.start()].split()[-1:] or ['']
+        case = 'acc' if prev[0] in ACC_AFTER else 'nom'
+        return f'{num(int(m[1]), case, gender_of(m[2]))} {m[2]}'
+    t = re.sub(r'(\d+) ([А-Яа-яЁё]+)', before_noun, t)
     # Remaining bare numbers (in sums): nominative.
     t = re.sub(r'\d+', lambda m: num(int(m[0])), t)
     # Signs that may be left.

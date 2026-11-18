@@ -66,6 +66,24 @@ export function speechText(html: string): string {
     .trim();
 }
 
+/**
+ * The phone's own voice reads signs aloud by their names («стрелка», «слэш»): before it reads,
+ * signs are turned into words or pauses, and anything else that is not text is dropped.
+ */
+export function forPhoneVoice(text: string): string {
+  return text
+    .replace(/\u0301/g, '') // stress marks: во́ды
+    .replace(/(\d)\s*м²/g, '$1 кв. м')
+    .replace(/²/g, '')
+    .replace(/\s*→\s*/g, ', ')
+    .replace(/\bII спряжение/g, 'второе спряжение')
+    .replace(/\bI спряжение/g, 'первое спряжение')
+    .replace(/\s+\+\s+/g, ' плюс ')
+    .replace(/[^\p{L}\p{N}\s.,!?:;«»"()—–…-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 let current: SpeechSynthesisUtterance | null = null;
 
 /** Read the text aloud (stops anything already being read). Returns false if there is no speech engine. */
@@ -76,7 +94,7 @@ export function say(html: string, slow = false): boolean {
   if (sayRecorded(text)) return true;
   const s = synth();
   if (!s) return false;
-  const u = new SpeechSynthesisUtterance(text);
+  const u = new SpeechSynthesisUtterance(forPhoneVoice(text));
   u.lang = 'ru-RU';
   const v = pickVoice(s.getVoices());
   if (v) u.voice = v as SpeechSynthesisVoice;

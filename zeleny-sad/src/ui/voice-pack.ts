@@ -8,11 +8,39 @@
 
 import { pieceKey, speechPieces } from './voice-units';
 
-interface VoiceIndex {
+export interface VoiceIndex {
   /** File names of the packs, next to voice.json. */
   packs: string[];
   /** Piece key → [pack number, byte offset, byte length]. */
   clips: Record<string, [number, number, number]>;
+  /**
+   * Pieces said from shorter chunks (the fair of the 4th–5th class: too many different numbers to
+   * record each problem): piece key → numbers of its chunks in `chunks`.
+   */
+  seq?: Record<string, number[]>;
+  chunks?: [number, number, number][];
+}
+
+type Span = [number, number, number];
+/** Silence between the chunks of one piece, ms: they are one phrase. */
+const CHUNK_PAUSE = 20;
+
+/** The recorded spans of a text with the silence before each, or null unless all of it is recorded. */
+export function recordedParts(text: string, idx: VoiceIndex | null = index): { span: Span; pause: number }[] | null {
+  if (!idx) return null;
+  const parts: { span: Span; pause: number }[] = [];
+  for (const p of speechPieces(text)) {
+    const key = pieceKey(p.text);
+    const whole = idx.clips[key];
+    if (whole) {
+      parts.push({ span: whole, pause: p.pause });
+      continue;
+    }
+    const seq = idx.seq?.[key];
+    if (!seq?.length || !idx.chunks) return null;
+    seq.forEach((n, i) => parts.push({ span: idx.chunks![n], pause: i === 0 ? p.pause : CHUNK_PAUSE }));
+  }
+  return parts.length && parts.every((x) => x.span) ? parts : null;
 }
 
 type AC = typeof AudioContext;
@@ -124,10 +152,9 @@ function decode(a: AudioContext, bytes: ArrayBuffer): Promise<AudioBuffer> {
  */
 export function sayRecorded(text: string): boolean {
   if (!recordedSupported()) return false;
-  const pieces = speechPieces(text);
-  if (!pieces.length) return false;
-  const spans = pieces.map((p) => index!.clips[pieceKey(p.text)]);
-  if (spans.some((s) => !s || !packs[s[0]])) return false;
+  const parts = recordedParts(text);
+  if (!parts || parts.some((x) => !packs[x.span[0]])) return false;
+  const spans = parts.map((x) => x.span);
   const a = context();
   if (!a) return false;
   stopRecorded();
@@ -138,7 +165,7 @@ export function sayRecorded(text: string): boolean {
       if (gen !== generation) return;
       let t = a.currentTime + 0.05;
       buffers.forEach((buf, i) => {
-        t += pieces[i].pause / 1000;
+        t += parts[i].pause / 1000;
         const src = a.createBufferSource();
         src.buffer = buf;
         src.connect(a.destination);
