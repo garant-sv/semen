@@ -42,10 +42,10 @@ describe('profile and grades', () => {
     }
   });
 
-  it('fair problems for grade 2 stay small; grade 5 starts harder', () => {
+  it("fair problems for grade 2 stay small; grade 5 starts one step up", () => {
     expect(fairLevel(0, 2)).toBe(1);
     expect(fairLevel(999, 2)).toBe(1);
-    expect(fairLevel(0, 5)).toBe(3);
+    expect(fairLevel(0, 5)).toBe(2);
     const r = seq(0);
     for (let i = 0; i < 200; i++) {
       const p = makeProblem(fairLevel(i, 2), r, 'Ёжик', undefined, 2);

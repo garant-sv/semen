@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FAIR_EVERY_SEC, FAIR_QUEUE, KINDS_BY_LEVEL, fairLevel, makeProblem, plural, type MathKind } from '../../src/game/math';
+import { FAIR_EVERY_SEC, FAIR_QUEUE, KINDS_BY_LEVEL, LEVELS_BY_GRADE, fairLevel, makeProblem, plural, type MathKind } from '../../src/game/math';
 import { advanceFair, newGame, nextCustomerIn, serveCustomer } from '../../src/game/state';
 import { parseSave } from '../../src/game/save';
 
@@ -47,6 +47,32 @@ describe('math problems', () => {
       const [money, price, n, rest] = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4] ?? 0)];
       expect(n * price + rest).toBe(money);
       expect(rest).toBeLessThan(price);
+    }
+  });
+
+  it('numbers suit mental arithmetic by the programme (ФРП): long multiplication and division stay out', () => {
+    const rand = seeded(5);
+    const ALL_KINDS: MathKind[] = ['cost', 'change', 'canBuy', 'share', 'area', 'perimeter', 'bushes', 'minutes', 'fraction', 'distance'];
+    for (const grade of [3, 4, 5]) {
+      const [lo, hi] = LEVELS_BY_GRADE[grade];
+      for (let level = lo; level <= hi; level++)
+        for (const kind of ALL_KINDS)
+          for (let i = 0; i < 300; i++) {
+            const p = makeProblem(level, rand, 'X', kind, grade);
+            for (const [, a, b, c] of p.solution.matchAll(/(\d+) × (\d+) = (\d+)/g)) {
+              const [x, y] = [Number(a), Number(b)].sort((u, v) => u - v);
+              // A digit times a number within 100, or a digit times round tens or hundreds.
+              expect(x, p.solution).toBeLessThanOrEqual(9);
+              expect(Number(c) <= 100 || y % 10 === 0, p.solution).toBe(true);
+            }
+            for (const [, a, b] of p.solution.matchAll(/(\d+) : (\d+)/g)) {
+              const [x, y] = [Number(a), Number(b)];
+              // By a digit within 100 or with round numbers; by a two-digit number only round ones (250 : 30).
+              if (y >= 10) expect(x % 10 === 0 && y % 10 === 0, p.solution).toBe(true);
+              else expect(x <= 100 || x % 10 === 0, p.solution).toBe(true);
+            }
+            if (grade === 3 && kind !== 'minutes') expect(p.answer, p.solution).toBeLessThanOrEqual(100);
+          }
     }
   });
 

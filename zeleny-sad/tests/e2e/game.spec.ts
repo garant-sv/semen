@@ -538,12 +538,21 @@ test('profile: name and class are asked once and can be changed in the Menu', as
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Начать играть!' })).toBeDisabled();
   await shots(page, '20-profile');
+  // The first meeting cannot be skipped: no close button, a tap outside the card does nothing.
+  await expect(page.locator('.sheet-close')).toHaveCount(0);
+  await page.mouse.click(10, 10);
+  await expect(page.getByRole('button', { name: 'Начать играть!' })).toBeVisible();
   await page.getByPlaceholder('Например, Сёма').fill('Сёма<b>');
   await page.getByRole('button', { name: /^2\s*класс/ }).click();
   await page.getByRole('button', { name: 'Начать играть!' }).click();
   await expect(page.locator('.toast').first()).toContainText('Рад знакомству, Сёмаb!');
   await page.reload();
   await expect(page.locator('.quest-title')).toContainText('Задание 1 из 18');
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: /2 класс — изменить/ }).click();
+  // From the Menu it can be closed: the close button is above Listik's picture and works.
+  await page.locator('.sheet-close').click();
   await expect(page.locator('#sheetBackdrop')).toBeHidden();
   await page.getByRole('button', { name: 'Меню' }).click();
   await page.getByRole('button', { name: /2 класс — изменить/ }).click();
@@ -945,4 +954,19 @@ test('2 class: no gardener sheet at the start (Listik leads), but one can be cal
   await expect(page.locator('#l-gardener .gd-me')).toHaveCount(0);
   await page.getByRole('button', { name: 'Меню' }).click();
   await expect(page.getByRole('button', { name: 'Позвать садовника' })).toBeVisible();
+});
+
+test('garden news wait while a window is open and come after it is closed', async ({ page }) => {
+  await start(page);
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await expect(page.locator('#sheetBackdrop')).toBeVisible();
+  await page.evaluate(() => (window.__gardenApp as unknown as { announce: (t: string) => void }).announce('Новый значок: «Проверка»!'));
+  await page.clock.runFor(1500);
+  await expect(page.locator('.toast', { hasText: 'Проверка' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Закрыть' }).click();
+  await page.clock.runFor(1000);
+  await expect(page.locator('.toast', { hasText: 'Проверка' })).toHaveCount(1);
+  // With nothing open, news shows at once.
+  await page.evaluate(() => (window.__gardenApp as unknown as { announce: (t: string) => void }).announce('Сразу'));
+  await expect(page.locator('.toast', { hasText: 'Сразу' })).toHaveCount(1);
 });
