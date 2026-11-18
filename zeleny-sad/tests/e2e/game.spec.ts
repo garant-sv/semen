@@ -618,8 +618,8 @@ test('Listik reads aloud: on for 2 class, button reads the quest, switch in Menu
   const box = (await speak.boundingBox())!;
   expect(box.width).toBeGreaterThanOrEqual(44);
   await speak.click();
-  const said = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
-  expect(said.at(-1)).toContain('Привет! Я Листик');
+  // The recording cannot be downloaded here, so after the wait the phone's voice reads.
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as { __said: string[] }).__said)).at(-1)).toContain('Привет! Я Листик');
   await expect(page.locator('#quest .goals')).toBeVisible(); // the tap did not fold the card
   await shots(page, '23-voice');
 
@@ -631,6 +631,7 @@ test('Listik reads aloud: on for 2 class, button reads the quest, switch in Menu
   });
   await page.locator('#listikBtn').click();
   await expect(page.locator('#sheet h2 .speak')).toBeVisible();
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as { __said: string[] }).__said)).at(-1)).toMatch(/\?$/);
   const said2 = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
   expect(said2.at(-1)).not.toContain('Варианты ответа');
   expect(said2.at(-1)).toMatch(/\?$/);
@@ -693,6 +694,104 @@ test('Listik reads aloud with the recorded voice once it is downloaded', async (
     .toBeGreaterThan(3);
   expect(await page.evaluate(() => (window as unknown as { __log: string[] }).__log)).not.toContain('system voice');
   await page.context().setOffline(false);
+});
+
+test.describe('speaker button', () => {
+  // Without the service worker, so the test can hold back the big download (a slow phone network).
+  test.use({ serviceWorkers: 'block' });
+test('a tap while Listik reads stops him; a tap before the recording arrives waits for it', async ({ page }) => {
+  await page.addInitScript(() => {
+    const log: string[] = [];
+    (window as unknown as { __log: string[] }).__log = log;
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (...args: Parameters<typeof start>) {
+      log.push('clip');
+      return start.apply(this, args);
+    };
+    const stop = AudioBufferSourceNode.prototype.stop;
+    AudioBufferSourceNode.prototype.stop = function (...args: Parameters<typeof stop>) {
+      log.push('stop');
+      return stop.apply(this, args);
+    };
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: { speaking: false, pending: false, getVoices: () => [], speak: () => log.push('system voice'), cancel: () => undefined },
+    });
+  });
+  // The recording arrives slowly (a big file on a phone): hold it back for 3 seconds.
+  let held = 0;
+  await page.route(/\/voice\/pack-[0-9a-f]+\.txt$/, async (route) => {
+    held += 1;
+    await new Promise((r) => setTimeout(r, 3000));
+    await route.continue();
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  const speak = page.locator('#quest .speak');
+  await expect.poll(() => held, { timeout: 30_000 }).toBeGreaterThan(0); // the download has started and is being held
+  await speak.click(); // before the recording is here
+  await expect(speak).toHaveClass(/speaking/);
+  expect(await page.evaluate(() => (window as unknown as { __log: string[] }).__log)).toEqual([]);
+  await expect(speak).toHaveAttribute('aria-label', 'Остановить');
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as { __log: string[] }).__log)).filter((l) => l === 'clip').length, { timeout: 30_000 }).toBeGreaterThan(3);
+  const log = await page.evaluate(() => (window as unknown as { __log: string[] }).__log);
+  expect(log).not.toContain('system voice'); // waited for the live voice instead of the robot one
+  await shots(page, '28-speaking');
+
+  // Second tap stops: no new clips start, the button turns back into «listen».
+  const clips = log.filter((l) => l === 'clip').length;
+  await speak.click();
+  await expect(speak).not.toHaveClass(/speaking/);
+  await expect(speak).toHaveAttribute('aria-label', 'Послушать');
+  await page.waitForTimeout(500);
+  const after = await page.evaluate(() => (window as unknown as { __log: string[] }).__log);
+  expect(after.filter((l) => l === 'clip').length).toBe(clips);
+  expect(after).toContain('stop');
+
+  // And a third tap reads again from the start.
+  await speak.click();
+  await expect(speak).toHaveClass(/speaking/);
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as { __log: string[] }).__log)).filter((l) => l === 'clip').length).toBeGreaterThan(clips);
+});
+});
+
+test('«Тихо»: one tap on the screen silences Listik and the sounds, and it is remembered', async ({ page }) => {
+  await page.addInitScript(() => {
+    const log: string[] = [];
+    (window as unknown as { __log: string[] }).__log = log;
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: { speaking: false, pending: false, getVoices: () => [], speak: () => log.push('speak'), cancel: () => log.push('cancel') },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await expect(page.locator('#quest .speak')).toBeVisible();
+  const mute = page.locator('#muteBtn');
+  const box = (await mute.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  // Listik's button stays fully on screen next to it, even on the narrowest phones.
+  const lb = (await page.locator('#listikBtn').boundingBox())!;
+  expect(lb.x + lb.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+
+  await page.locator('#quest .speak').click(); // Listik starts reading…
+  await mute.click(); // …and the teacher looks: one tap, quiet.
+  await expect(mute).toHaveAttribute('aria-pressed', 'true');
+  await expect(mute).toHaveAttribute('aria-label', 'Включить звук');
+  await expect(page.locator('#quest .speak')).toHaveCount(0);
+  await shots(page, '29-muted');
+  await page.reload();
+  await expect(page.locator('#muteBtn')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#quest .speak')).toHaveCount(0);
+  // The Menu still shows what was chosen there; another tap on the button brings the sound back.
+  await page.locator('#muteBtn').click();
+  await expect(page.locator('#muteBtn')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#quest .speak')).toBeVisible();
 });
 
 test('2–3 class: hint finger after a quiet moment, fair problem with a picture, quiz with pictures', async ({ page }) => {

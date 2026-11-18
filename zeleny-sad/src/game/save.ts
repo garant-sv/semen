@@ -296,6 +296,7 @@ export function sanitize(raw: Raw, now: number): GameState {
   s.settings.tilt = settings.tilt !== false;
   s.settings.bigText = typeof settings.bigText === 'boolean' ? settings.bigText : null;
   s.settings.voice = typeof settings.voice === 'boolean' ? settings.voice : null;
+  s.settings.muted = settings.muted === true;
   return s;
 }
 

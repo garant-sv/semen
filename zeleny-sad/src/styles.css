@@ -3152,3 +3152,76 @@ button.card:active {
     animation: none;
   }
 }
+
+/* While Listik reads, the speaker button turns into «stop». */
+.speak .stop-ico {
+  display: none;
+}
+
+.speak.speaking {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.speak.speaking .stop-ico {
+  display: block;
+}
+
+.speak.speaking svg:not(.stop-ico) {
+  display: none;
+}
+
+/* «Тихо»: one tap silences the whole game (next to Listik, always on screen). */
+.hud-right {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mute-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--cream-3);
+  background: #fff;
+  color: var(--green);
+  box-shadow: var(--shadow);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mute-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+.mute-btn .mute-ico {
+  display: none;
+}
+
+.mute-btn.muted {
+  background: #f6e3df;
+  border-color: #e3b2a8;
+  color: #b4533f;
+}
+
+.mute-btn.muted .mute-ico {
+  display: block;
+}
+
+.mute-btn.muted svg:not(.mute-ico) {
+  display: none;
+}
+
+/* Narrow phones (320–360 px): the title gives way so the buttons fit. */
+@media (max-width: 360px) {
+  .hud .title {
+    visibility: hidden;
+    width: 0;
+  }
+}

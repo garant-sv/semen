@@ -37,3 +37,19 @@ describe('0.8: Listik reads aloud', () => {
     expect(voiceOn(s)).toBe(true);
   });
 });
+
+describe('«Тихо»: one button silences the game', () => {
+  it('turns off Listik and the sounds without losing the Menu choices', async () => {
+    const { soundOn, voiceWanted } = await import('../../src/game/state');
+    const s = newGame(0);
+    s.profile.grade = 2;
+    expect(voiceOn(s)).toBe(true);
+    expect(soundOn(s)).toBe(true);
+    s.settings.muted = true;
+    expect(voiceOn(s)).toBe(false);
+    expect(soundOn(s)).toBe(false);
+    expect(voiceWanted(s)).toBe(true); // the Menu still remembers it
+    s.settings.muted = false;
+    expect(voiceOn(s)).toBe(true);
+  });
+});

@@ -53,6 +53,38 @@ let ctx: AudioContext | null = null;
 /** Bumped on every new text and on stop: playback of an older text stops scheduling itself. */
 let generation = 0;
 let playing: AudioBufferSourceNode[] = [];
+/** Generation whose pieces are still being decoded (not yet scheduled), or -1. */
+let decoding = -1;
+/** Called when the recorded voice falls silent (finished or stopped). */
+let onIdle: (() => void) | null = null;
+export function onRecordedIdle(cb: (() => void) | null) {
+  onIdle = cb;
+}
+
+/** True while a recorded text is being prepared or played. */
+export function recordedBusy(): boolean {
+  return decoding === generation || playing.length > 0;
+}
+
+/**
+ * Whether the recorded voice can read this text once it is downloaded:
+ * 'ready' (can play now), 'wait' (still downloading, or the list of pieces is not here yet),
+ * 'no' (some piece was not recorded, or this phone cannot play it).
+ */
+export function recordedState(text: string): 'ready' | 'wait' | 'no' {
+  if (!audioClass()) return 'no';
+  const pieces = speechPieces(text);
+  if (!pieces.length) return 'no';
+  if (!index) return 'wait';
+  const parts = recordedParts(text);
+  if (!parts) return 'no';
+  return parts.every((x) => packs[x.span[0]]) ? 'ready' : 'wait';
+}
+
+/** Wake the audio output inside a tap (phones only allow sound the player started). */
+export function primeAudio() {
+  context();
+}
 
 const audioClass = (): AC | null =>
   typeof window === 'undefined'
@@ -159,10 +191,12 @@ export function sayRecorded(text: string): boolean {
   if (!a) return false;
   stopRecorded();
   const gen = ++generation;
+  decoding = gen;
   // Decode all pieces (fast: a few kilobytes each), then schedule them back to back.
   void Promise.all(spans.map(([k, off, len]) => decode(a, packs[k]!.slice(off, off + len))))
     .then((buffers) => {
       if (gen !== generation) return;
+      decoding = -1;
       let t = a.currentTime + 0.05;
       buffers.forEach((buf, i) => {
         t += parts[i].pause / 1000;
@@ -174,17 +208,23 @@ export function sayRecorded(text: string): boolean {
         playing.push(src);
         src.onended = () => {
           playing = playing.filter((x) => x !== src);
+          if (!playing.length && gen === generation) onIdle?.();
         };
       });
     })
     .catch(() => {
       /* a broken piece: stay silent rather than crash */
+      if (gen === generation) {
+        decoding = -1;
+        onIdle?.();
+      }
     });
   return true;
 }
 
 export function stopRecorded() {
   generation++;
+  decoding = -1;
   for (const src of playing) {
     try {
       src.stop();
