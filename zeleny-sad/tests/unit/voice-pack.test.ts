@@ -5,13 +5,11 @@ import { GUESTS, GUEST_IDS, LISTIK_TIPS, PLANTS, PLANT_IDS, QUESTS } from '../..
 import { KINDS_BY_GRADE, LEVELS_BY_GRADE, makeProblem } from '../../src/game/math';
 import { QUESTIONS } from '../../src/game/quiz';
 import { WORDS, viewWord } from '../../src/game/russian';
-import { speechText } from '../../src/ui/voice';
+import { forPhoneVoice, speechText } from '../../src/ui/voice';
+import { recordedParts, type VoiceIndex } from '../../src/ui/voice-pack';
 import { pieceKey, speechPieces } from '../../src/ui/voice-units';
 
-const index = JSON.parse(readFileSync(join(__dirname, '../../public/voice/voice.json'), 'utf8')) as {
-  packs: string[];
-  clips: Record<string, [number, number, number]>;
-};
+const index = JSON.parse(readFileSync(join(__dirname, '../../public/voice/voice.json'), 'utf8')) as VoiceIndex;
 const missing = (html: string) => speechPieces(speechText(html)).filter((p) => !index.clips[pieceKey(p.text)]).map((p) => p.text);
 
 describe('0.8: Listik’s recorded voice', () => {
@@ -73,12 +71,41 @@ describe('0.8: Listik’s recorded voice', () => {
     expect([...gaps]).toEqual([]);
   });
 
+  it('has every fair problem of the 4th and 5th class, said from recorded chunks', () => {
+    let seed = 11;
+    const rand = () => {
+      seed = (seed * 16807) % 2147483647;
+      return (seed - 1) / 2147483646;
+    };
+    const gaps = new Set<string>();
+    for (const grade of [4, 5]) {
+      const [lo, hi] = LEVELS_BY_GRADE[grade];
+      for (let level = lo; level <= hi; level++)
+        for (const kind of KINDS_BY_GRADE[grade])
+          for (let i = 0; i < 300; i++) {
+            const p = makeProblem(level, rand, GUESTS[GUEST_IDS[i % GUEST_IDS.length]].name, kind, grade);
+            for (const t of [p.text, `Подсказка: ${p.hint}`, `Не совсем. Подсказка: ${p.hint}`, `Правильный ответ: ${p.answerText}. Решение: ${p.solution}`, `Верно! Решение: ${p.solution}`])
+              if (!recordedParts(speechText(t), index)) gaps.add(t);
+          }
+    }
+    expect([...gaps].slice(0, 10)).toEqual([]);
+    // A big number is said in parts, one right after the other.
+    const parts = recordedParts('равно 2345', index)!;
+    expect(parts.length).toBeGreaterThan(2);
+    expect(parts.slice(1).every((x) => x.pause < 50)).toBe(true);
+  });
+
+  it('the phone voice gets no signs to read out by name', () => {
+    expect(forPhoneVoice('Тундра → тайга → степь? Проверочное слово: во́ды. 24 м² \\ / *')).toBe('Тундра, тайга, степь? Проверочное слово: воды. 24 кв. м');
+    expect(forPhoneVoice('Писать — I спряжение')).toBe('Писать — первое спряжение');
+  });
+
   it('points at packs that are in the build', () => {
     expect(index.packs).toHaveLength(2);
     const sizes = index.packs.map((name) => {
       expect(name).toMatch(/^pack-[0-9a-f]{12}\.txt$/);
       return readFileSync(join(__dirname, '../../public/voice', name)).length;
     });
-    for (const [k, off, len] of Object.values(index.clips)) expect(off + len).toBeLessThanOrEqual(sizes[k]);
+    for (const [k, off, len] of [...Object.values(index.clips), ...(index.chunks ?? [])]) expect(off + len).toBeLessThanOrEqual(sizes[k]);
   });
 });
