@@ -268,9 +268,47 @@ SHA="$(git ls-remote "$REPO_URL" refs/heads/main 2>/dev/null | awk '{print $1}')
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-curl -fsSL --max-time 120 "https://codeload.github.com/garant-sv/semen/tar.gz/$SHA" | tar -xz -C "$TMP" --wildcards '*/zeleny-sad/site/*'
-SRC="$(find "$TMP" -maxdepth 3 -type d -path '*/zeleny-sad/site' | head -1)"
-[ -n "$SRC" ] && [ -f "$SRC/index.html" ] && [ -f "$SRC/sw.js" ] || { echo "$(date -Is) $SHA: в архиве нет сборки, пропускаю"; exit 0; }
+PREV="$(readlink -f "$ROOT/current" || true)"
+# Скачиваем не весь репозиторий (в нём ~50 МБ озвучки), а только файлы сборки, по одному:
+# список файлов и их git-хэши берём из GitHub без содержимого; файл, который не изменился
+# с прошлого выпуска (озвучка), просто копируем; остальные качаем с докачкой и повторами
+# и сверяем с хэшем из git, так что подменённый или оборванный файл не пройдёт.
+GIT="$TMP/git"
+git init -q "$GIT"
+git -C "$GIT" fetch -q --depth 1 --filter=blob:none "$REPO_URL" "$SHA" \
+  || { echo "$(date -Is) $SHA: не удалось получить список файлов, попробую через 10 минут"; exit 0; }
+SRC="$TMP/site"
+mkdir -p "$SRC"
+FETCHED=0
+REUSED=0
+while IFS= read -r -d '' line; do
+  meta="${line%%$'\t'*}"
+  path="${line#*$'\t'}"
+  read -r mode type oid <<<"$meta"
+  rel="${path#zeleny-sad/site/}"
+  case "$rel" in ''|/*|*..*) echo "$(date -Is) $SHA: странный путь $path, пропускаю выпуск"; exit 0 ;; esac
+  # Только обычные файлы: ни ссылок, ни исполняемых.
+  [ "$type" = blob ] && [ "$mode" = 100644 ] || { echo "$(date -Is) $SHA: $path не обычный файл, пропускаю выпуск"; exit 0; }
+  dest="$SRC/$rel"
+  mkdir -p "$(dirname "$dest")"
+  if [ -n "$PREV" ] && [ -f "$PREV/$rel" ] && [ "$(git hash-object "$PREV/$rel")" = "$oid" ]; then
+    cp "$PREV/$rel" "$dest"
+    REUSED=$((REUSED + 1))
+    continue
+  fi
+  ok=0
+  for _ in 1 2 3 4 5; do
+    curl -fsSL --connect-timeout 20 --max-time 900 -C - -o "$dest" \
+      "https://raw.githubusercontent.com/garant-sv/semen/$SHA/$path" || true
+    if [ -f "$dest" ] && [ "$(git hash-object "$dest")" = "$oid" ]; then ok=1; break; fi
+    # Файл скачан целиком, но не сходится с git: начинаем его заново, а не докачиваем.
+    if [ -f "$dest" ] && [ "$(stat -c %s "$dest")" -ge "$(git -C "$GIT" cat-file -s "$oid" 2>/dev/null || echo 0)" ]; then rm -f "$dest"; fi
+    sleep 5
+  done
+  [ "$ok" = 1 ] || { echo "$(date -Is) $SHA: не скачался $path, попробую через 10 минут"; exit 0; }
+  FETCHED=$((FETCHED + 1))
+done < <(git -C "$GIT" ls-tree -r -z "$SHA" -- zeleny-sad/site/)
+[ -f "$SRC/index.html" ] && [ -f "$SRC/sw.js" ] || { echo "$(date -Is) $SHA: в main нет сборки, пропускаю"; exit 0; }
 # Только обычные файлы понятных веб-типов и разумный размер — ничего исполняемого и лишнего.
 if find "$SRC" ! -type d ! -type f | grep -q . \
    || find "$SRC" -type f ! -regex '.*\.\(html\|js\|css\|json\|webmanifest\|png\|svg\|ico\|txt\|woff2\|webp\|jpg\)$' | grep -q . \
@@ -279,7 +317,6 @@ if find "$SRC" ! -type d ! -type f | grep -q . \
   exit 0
 fi
 
-PREV="$(readlink -f "$ROOT/current" || true)"
 RELEASE="$ROOT/releases/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$RELEASE"
 cp -r "$SRC/." "$RELEASE/"
@@ -301,7 +338,7 @@ if [ "$CODE" != 200 ] && [ -n "$PREV" ] && [ -d "$PREV" ]; then
 fi
 echo "$SHA" > "$ETC/deployed-sha"
 ls -1dt "$ROOT"/releases/* | tail -n +4 | xargs -r rm -rf
-echo "$(date -Is) выложен $SHA"
+echo "$(date -Is) выложен $SHA (скачано файлов: $FETCHED, взято из прошлого выпуска: $REUSED)"
 UPDATE
 chmod 700 "$ETC/site-update.sh"
 echo "$DOMAIN" > "$ETC/domain"
