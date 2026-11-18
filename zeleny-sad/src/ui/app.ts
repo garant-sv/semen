@@ -255,6 +255,8 @@ export class App {
   private cache = new Map<string, string>();
   private wraps = new Map<string, SVGGElement>();
   private sheetOnClose: (() => void) | null = null;
+  /** The open sheet must be answered: no close button, a tap outside does nothing. */
+  private sheetLocked = false;
   private tickTimer = 0;
   private hiddenAt = 0;
   private tipIndex = 0;
@@ -404,7 +406,7 @@ export class App {
       }
     });
     $(this.root, '#sheetBackdrop').addEventListener('click', (e) => {
-      if (e.target === e.currentTarget) this.closeSheet();
+      if (e.target === e.currentTarget && !this.sheetLocked) this.closeSheet();
     });
     $(this.root, '#importFile').addEventListener('change', (e) => this.onImportFile(e.target as HTMLInputElement));
 
@@ -1076,13 +1078,18 @@ ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p
 
   // ------------------------------------------------------------ sheets
 
-  private openSheet(html: string, onClose?: () => void) {
+  /**
+   * Open a sheet over the garden. A `locked` sheet has no close button and does not close on a tap
+   * outside: it is used where a choice must be made (the first «Кто играет?»).
+   */
+  private openSheet(html: string, onClose?: () => void, opts: { locked?: boolean } = {}) {
     const back = $(this.root, '#sheetBackdrop');
     const sheet = $(this.root, '#sheet');
-    sheet.innerHTML = `<button type="button" class="sheet-close" aria-label="Закрыть">${ICONS.close}</button>${html}`;
+    this.sheetLocked = Boolean(opts.locked);
+    sheet.innerHTML = `${this.sheetLocked ? '' : `<button type="button" class="sheet-close" aria-label="Закрыть">${ICONS.close}</button>`}${html}`;
     back.hidden = false;
     this.sheetOnClose = onClose ?? null;
-    $(sheet, '.sheet-close').addEventListener('click', () => this.closeSheet());
+    sheet.querySelector('.sheet-close')?.addEventListener('click', () => this.closeSheet());
     return sheet;
   }
 
@@ -1095,6 +1102,7 @@ ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p
     const back = $(this.root, '#sheetBackdrop');
     if (back.hidden) return;
     back.hidden = true;
+    this.sheetLocked = false;
     stopSpeaking();
     $(this.root, '#sheet').innerHTML = '';
     const cb = this.sheetOnClose;
@@ -1935,7 +1943,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   <p class="muted small profile-note">По классу Листик подбирает вопросы, задачи на ярмарке и слова на табличках. Имя хранится только на этом устройстве.</p>
   <div class="profile-cta"><button type="submit" class="btn primary wide big" data-act="save" ${grade ? '' : 'disabled'}>${first ? 'Начать играть!' : 'Готово'}</button>
   <p class="pick-hint">Выбери свой класс — и в путь!</p></div>
-</form>`, then ? () => window.setTimeout(then, 200) : undefined);
+</form>`, then ? () => window.setTimeout(then, 200) : undefined, { locked: first });
     const save = $<HTMLButtonElement>(sheet, '[data-act="save"]');
     sheet.querySelectorAll<HTMLButtonElement>('[data-grade]').forEach((b) =>
       b.addEventListener('click', () => {

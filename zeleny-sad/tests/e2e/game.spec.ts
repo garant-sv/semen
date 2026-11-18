@@ -538,12 +538,21 @@ test('profile: name and class are asked once and can be changed in the Menu', as
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Начать играть!' })).toBeDisabled();
   await shots(page, '20-profile');
+  // The first meeting cannot be skipped: no close button, a tap outside the card does nothing.
+  await expect(page.locator('.sheet-close')).toHaveCount(0);
+  await page.mouse.click(10, 10);
+  await expect(page.getByRole('button', { name: 'Начать играть!' })).toBeVisible();
   await page.getByPlaceholder('Например, Сёма').fill('Сёма<b>');
   await page.getByRole('button', { name: /^2\s*класс/ }).click();
   await page.getByRole('button', { name: 'Начать играть!' }).click();
   await expect(page.locator('.toast').first()).toContainText('Рад знакомству, Сёмаb!');
   await page.reload();
   await expect(page.locator('.quest-title')).toContainText('Задание 1 из 18');
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: /2 класс — изменить/ }).click();
+  // From the Menu it can be closed: the close button is above Listik's picture and works.
+  await page.locator('.sheet-close').click();
   await expect(page.locator('#sheetBackdrop')).toBeHidden();
   await page.getByRole('button', { name: 'Меню' }).click();
   await page.getByRole('button', { name: /2 класс — изменить/ }).click();

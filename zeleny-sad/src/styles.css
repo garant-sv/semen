@@ -418,6 +418,7 @@ button {
 
 .sheet-close {
   position: absolute;
+  z-index: 3; /* above heroes with their own stacking (the profile's Listik on the hill) */
   top: 10px;
   right: 10px;
   width: 48px;
