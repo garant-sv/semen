@@ -192,6 +192,11 @@ $( [ "$LISTEN6" = 1 ] && echo '    listen [::]:443 ssl;' )
     root $ROOT/current;
     index index.html;
     server_tokens off;
+    # Сжатие: код игры и указатель озвучки в 3–6 раз меньше. Пакеты голоса (MP3 под .txt) не сжимаем.
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types application/javascript text/css application/json application/manifest+json image/svg+xml;
     # Детям — никаких журналов с адресами: обычный access_log для игры выключен, а в журнал
     # ошибок (там nginx пишет IP) попадают только поломки самого сервера, не запросы детей.
     access_log off;

@@ -90,6 +90,32 @@ describe('math problems', () => {
     expect(fairLevel(0)).toBe(1);
     expect(fairLevel(6)).toBe(2);
     expect(fairLevel(100)).toBe(4);
+    expect(fairLevel(100, 4, 2)).toBe(2);
+    expect(fairLevel(100, 5, 3)).toBe(2); // never below the class's first level
+  });
+
+  it('the fair steps down after two unsolved customers and back up after three first tries', () => {
+    const s = newGame(T0);
+    s.profile.grade = 4;
+    s.fair.solved = 18; // level 4
+    const serve = (r: 'first' | 'second' | 'failed') => {
+      s.fair.queue = 1;
+      s.fair.lastAt = T0;
+      return serveCustomer(s, r, T0);
+    };
+    expect(serve('failed')).toMatchObject({ level: 4 });
+    expect(serve('failed')).toMatchObject({ level: 4 });
+    expect(fairLevel(s.fair.solved, 4, s.fair.ease)).toBe(3);
+    serve('failed');
+    serve('failed');
+    expect(fairLevel(s.fair.solved, 4, s.fair.ease)).toBe(2);
+    serve('first');
+    serve('second'); // the streak starts again
+    serve('first');
+    serve('first');
+    expect(fairLevel(s.fair.solved, 4, s.fair.ease)).toBe(2);
+    serve('first');
+    expect(fairLevel(s.fair.solved, 4, s.fair.ease)).toBe(3);
   });
 
   it('Russian plural forms and «по N лепестку»', () => {
@@ -134,6 +160,6 @@ describe('fair queue', () => {
     const v5 = { ...newGame(T0), version: 5 } as Record<string, unknown>;
     delete v5.fair;
     const { state } = parseSave(JSON.stringify(v5), T0);
-    expect(state.fair).toEqual({ queue: 0, lastAt: 0, solved: 0, firstTry: 0 });
+    expect(state.fair).toEqual({ queue: 0, lastAt: 0, solved: 0, firstTry: 0, ease: 0, misses: 0, streak: 0 });
   });
 });
