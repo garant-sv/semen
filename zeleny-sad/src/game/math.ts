@@ -63,11 +63,18 @@ const FRACTIONS: Record<number, [string, string]> = {
 /** Level range by school class: the 2nd grade stays easy, the 5th starts one step up. */
 export const LEVELS_BY_GRADE: Record<number, [number, number]> = { 2: [1, 1], 3: [1, 2], 4: [1, 4], 5: [2, 4] };
 
-/** Level from the number of solved problems, kept within the class's range. */
-export const fairLevel = (solved: number, grade = 4) => {
+/**
+ * Level from the number of solved problems, kept within the class's range. `ease` steps it back down
+ * after the child got stuck (see serveCustomer): the fair follows the child, not only the counter.
+ */
+export const fairLevel = (solved: number, grade = 4, ease = 0) => {
   const [lo, hi] = LEVELS_BY_GRADE[grade] ?? LEVELS_BY_GRADE[4];
-  return Math.min(hi, lo + Math.floor(solved / 6));
+  return Math.max(lo, Math.min(hi, lo + Math.floor(solved / 6)) - ease);
 };
+
+/** Two unsolved customers in a row make the fair one level easier; three first tries in a row undo it. */
+export const FAIR_EASE_AFTER_MISSES = 2;
+export const FAIR_HARDER_AFTER_STREAK = 3;
 
 /** Problem kinds a class has already studied. */
 export const KINDS_BY_GRADE: Record<number, MathKind[]> = {

@@ -286,6 +286,9 @@ export function sanitize(raw: Raw, now: number): GameState {
     lastAt: num(fair.lastAt, 0, 0),
     solved: Math.floor(num(fair.solved, 0)),
     firstTry: Math.floor(num(fair.firstTry, 0)),
+    ease: Math.floor(num(fair.ease, 0, 0, 3)),
+    misses: Math.floor(num(fair.misses, 0, 0, 10)),
+    streak: Math.floor(num(fair.streak, 0, 0, 10)),
   };
   const quiz = isObj(raw.quiz) ? raw.quiz : {};
   const qids = QUESTIONS.map((q) => q.id);

@@ -32,7 +32,7 @@ import {
   type Quest,
   type Stage,
 } from './data';
-import { FAIR_EVERY_SEC, FAIR_FROM_QUEST, FAIR_QUEUE, fairLevel } from './math';
+import { FAIR_EASE_AFTER_MISSES, FAIR_EVERY_SEC, FAIR_FROM_QUEST, FAIR_HARDER_AFTER_STREAK, FAIR_QUEUE, fairLevel } from './math';
 import { RUS_FROM_QUEST, RUS_REWARD, RUS_TRY_REWARD, WORDS, viewWord, wordsForGrade } from './russian';
 import { QUESTIONS, QUIZ_EVERY, QUIZ_FROM_QUEST, QUIZ_REWARD, QUIZ_TRY_REWARD, questionGrades, type Grade, type Question } from './quiz';
 
@@ -132,6 +132,12 @@ export interface GameState {
     solved: number;
     /** Solved on the first try. */
     firstTry: number;
+    /** Levels the fair stepped down after the child got stuck (0 = as many as solved allow). */
+    ease: number;
+    /** Customers in a row the child could not help (resets on a solved one). */
+    misses: number;
+    /** First tries in a row (resets on any other result). */
+    streak: number;
   };
   settings: {
     sound: boolean;
@@ -171,7 +177,7 @@ export function newGame(now: number): GameState {
     stats: { planted: {}, watered: 0, harvested: 0, sinceGolden: 0, sinceQuiz: 0 },
     badges: [],
     quiz: { pending: false, solved: [], correct: 0, asked: 0 },
-    fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0 },
+    fair: { queue: 0, lastAt: 0, solved: 0, firstTry: 0, ease: 0, misses: 0, streak: 0 },
     rus: { learned: [], correct: 0, total: 0 },
     profile: { nick: '', grade: null },
     gardener: null,
@@ -664,12 +670,23 @@ export function fairReward(level: number, result: FairResult): number {
 export function serveCustomer(s: GameState, result: FairResult, now: number): Ok<{ petals: number; level: number }> | Fail {
   advanceFair(s, now);
   if (s.fair.queue <= 0) return fail('Покупателей пока нет.');
-  const level = fairLevel(s.fair.solved, gradeOf(s));
+  const f = s.fair;
+  const level = fairLevel(f.solved, gradeOf(s), f.ease);
   const petals = fairReward(level, result);
-  if (s.fair.queue >= FAIR_QUEUE) s.fair.lastAt = now; // the timer restarts when a place frees up
-  s.fair.queue -= 1;
-  if (result !== 'failed') s.fair.solved += 1;
-  if (result === 'first') s.fair.firstTry += 1;
+  if (f.queue >= FAIR_QUEUE) f.lastAt = now; // the timer restarts when a place frees up
+  f.queue -= 1;
+  if (result !== 'failed') f.solved += 1;
+  if (result === 'first') f.firstTry += 1;
+  // The level follows the child: stuck twice in a row — one step easier; three first tries — back up.
+  f.misses = result === 'failed' ? f.misses + 1 : 0;
+  f.streak = result === 'first' ? f.streak + 1 : 0;
+  if (f.misses >= FAIR_EASE_AFTER_MISSES) {
+    f.ease = Math.min(3, f.ease + 1);
+    f.misses = 0;
+  } else if (f.streak >= FAIR_HARDER_AFTER_STREAK && f.ease > 0) {
+    f.ease -= 1;
+    f.streak = 0;
+  }
   s.petals += petals;
   s.updatedAt = now;
   return { ok: true, petals, level };

@@ -1,10 +1,10 @@
 /* Service worker for «Зелёный сад». Generated at build time from src/sw/sw-template.js. */
-const VERSION = '8aec3c748510';
+const VERSION = '0111c2455e14';
 const CACHE = 'green-garden-' + VERSION;
 const PRECACHE = [
   "./",
   "./assets/index-Cryz2Szt.css",
-  "./assets/index-I-B60Vrb.js",
+  "./assets/index-D-mhzD-X.js",
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -78,7 +78,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches
         .open(CACHE)
-        .then((c) => c.match(new URL('./index.html', self.registration.scope).href))
+        // The page is precached as «./» (the scope itself); «./index.html» is kept as a fallback name.
+        .then((c) => c.match(self.registration.scope).then((r) => r || c.match(new URL('./index.html', self.registration.scope).href)))
         .then((cached) => cached || fetch(req)),
     );
     return;

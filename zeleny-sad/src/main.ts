@@ -6,7 +6,18 @@ import { installTelemetry } from './telemetry';
 installTelemetry();
 const root = document.getElementById('app')!;
 const st = getStorage();
-const app = new App(root, 'storage' in st ? { storage: st.storage } : { storage: null, storageError: st.error });
+let app: App | undefined;
+try {
+  app = new App(root, 'storage' in st ? { storage: st.storage } : { storage: null, storageError: st.error });
+} catch (e) {
+  // Never a blank page: say what happened, and keep the update below working so a fix can arrive.
+  console.error(e);
+  root.innerHTML =
+    '<div style="font:18px/1.45 system-ui,sans-serif;color:#3E6B35;text-align:center;padding:30vh 24px 0">' +
+    '<p>Ой! Сад не открылся. Твой сад сохранён.</p><p>Закрой игру и открой её снова через минуту.</p>' +
+    '<button type="button" style="font:inherit;padding:10px 22px;border-radius:14px;border:0;background:#5B9A47;color:#fff">Попробовать ещё раз</button></div>';
+  root.querySelector('button')?.addEventListener('click', () => location.reload());
+}
 
 // Ask the browser to keep our data (helps against storage eviction; may be ignored).
 document.addEventListener(
@@ -25,7 +36,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   let reloadPending = false;
   const tryReload = () => {
     if (!reloadPending) return;
-    if (document.visibilityState === 'hidden' || app.isIdle()) location.reload();
+    if (document.visibilityState === 'hidden' || !app || app.isIdle()) location.reload();
   };
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     // The very first worker taking over a fresh page is not an update.
@@ -58,7 +69,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
           if (document.visibilityState === 'visible') void reg.update().catch(() => undefined);
         });
       })
-      .catch(() => app.toast('Офлайн-режим недоступен в этом браузере.', 'warn'));
+      .catch(() => app?.toast('Офлайн-режим недоступен в этом браузере.', 'warn'));
   });
 }
 
