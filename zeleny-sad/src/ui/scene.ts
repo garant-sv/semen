@@ -334,7 +334,7 @@ export function plotSVG(s: GameState, i: number, now: number): string {
     label += ': пустая';
   }
   const cls = `plot st-${st}${bloom ? ' bloom' : ''}${bloom && p.golden ? ' golden' : ''}`;
-  return `<g class="${cls}" data-plot="${i}" transform="translate(${x} ${y})" role="button" aria-label="${label}"><rect x="-58" y="-96" width="116" height="134" fill="transparent"/>${inner}${badge}${p.plant && p.sign && st !== 'locked' ? signSVG(i, p.sign) : ''}</g>`;
+  return `<g class="${cls}" data-plot="${i}" transform="translate(${x} ${y})" role="button" tabindex="0" aria-label="${label}"><rect x="-58" y="-96" width="116" height="134" fill="transparent"/>${inner}${badge}${p.plant && p.sign && st !== 'locked' ? signSVG(i, p.sign) : ''}</g>`;
 }
 
 /** A little wooden sign at the left of a bed: «?» until the word is filled in, then the word. */
@@ -345,7 +345,7 @@ function signSVG(i: number, sign: { id: string; solved: boolean }): string {
   const text = sign.solved
     ? `<text x="-50" y="-23.5" font-size="7.4" font-weight="800" text-anchor="middle" fill="${C.ink}"${label.length > 8 ? ' textLength="38" lengthAdjust="spacingAndGlyphs"' : ''}>${label}</text>`
     : `<text x="-50" y="-22" font-size="12" font-weight="900" text-anchor="middle" fill="#B5543F">?</text>`;
-  return `<g class="sign${sign.solved ? ' solved' : ' todo'}" data-sign="${i}" role="button" aria-label="${sign.solved ? `Табличка: ${label}` : 'Табличка: вставь пропущенную букву'}"><rect x="-74" y="-46" width="48" height="52" fill="transparent"/><rect x="-51.6" y="-20" width="3.2" height="22" fill="${C.woodDark}"/><rect x="-71" y="-34" width="42" height="16" rx="2.4" fill="${sign.solved ? '#F4E3C3' : '#FFF6E3'}" stroke="${C.woodDark}" stroke-width="1.3"/>${text}</g>`;
+  return `<g class="sign${sign.solved ? ' solved' : ' todo'}" data-sign="${i}" role="button" tabindex="0" aria-label="${sign.solved ? `Табличка: ${label}` : 'Табличка: вставь пропущенную букву'}"><rect x="-74" y="-46" width="48" height="52" fill="transparent"/><rect x="-51.6" y="-20" width="3.2" height="22" fill="${C.woodDark}"/><rect x="-71" y="-34" width="42" height="16" rx="2.4" fill="${sign.solved ? '#F4E3C3' : '#FFF6E3'}" stroke="${C.woodDark}" stroke-width="1.3"/>${text}</g>`;
 }
 
 export function plotBarSVG(s: GameState, i: number, now: number): string {
@@ -367,7 +367,7 @@ export function slotSVG(s: GameState, i: number, decorMode: boolean, selected: D
       ? `<ellipse class="slot-hint${selected ? ' active' : ''}" cx="0" cy="0" rx="24" ry="10" fill="${C.cream}" fill-opacity=".35" stroke="${C.cream}" stroke-width="2.4" stroke-dasharray="5 4"/>`
       : '';
   if (!content && !decorMode) return '';
-  return `<g class="slot${decorMode ? ' editable' : ''}" data-slot="${i}" transform="translate(${x} ${y})" role="button" aria-label="Место для украшения ${i + 1}"><rect x="-30" y="-80" width="60" height="96" fill="transparent"/>${hint}${content}</g>`;
+  return `<g class="slot${decorMode ? ' editable' : ''}" data-slot="${i}" transform="translate(${x} ${y})" role="button" tabindex="0" aria-label="Место для украшения ${i + 1}"><rect x="-30" y="-80" width="60" height="96" fill="transparent"/>${hint}${content}</g>`;
 }
 
 // ---------------------------------------------------------------- vegetable patch
@@ -377,7 +377,7 @@ export function vegSignSVG(open: boolean, available: boolean): string {
   const lock = open
     ? ''
     : `<g transform="translate(20 -50)"><rect x="-6" y="-4" width="12" height="10" rx="2" fill="#E2B94E" stroke="${C.woodDark}" stroke-width="1.2"/><path d="M-3.5 -4 v-3 a3.5 3.5 0 0 1 7 0 v3" stroke="${C.woodDark}" stroke-width="1.6" fill="none"/></g>`;
-  return `<g class="signpost${!open && available ? ' ready' : ''}" data-go="veg" transform="translate(372 216)" role="button" aria-label="Указатель: ${open ? 'перейти в огород' : 'заросший огород'}">
+  return `<g class="signpost${!open && available ? ' ready' : ''}" data-go="veg" transform="translate(372 216)" role="button" tabindex="0" aria-label="Указатель: ${open ? 'перейти в огород' : 'заросший огород'}">
 <rect x="-30" y="-66" width="56" height="74" fill="transparent"/>
 ${shadow(12, 4, 1)}<rect x="-2.2" y="-52" width="4.4" height="52" fill="${C.woodDark}"/>
 <path d="M-26 -54 H14 L24 -45 L14 -36 H-26Z" fill="#D9A06A" stroke="${C.woodDark}" stroke-width="1.6" stroke-linejoin="round"/>
@@ -451,7 +451,7 @@ export function zoneBackgroundSVG(zone: ZoneId): string {
 
 /** Signpost in a natural zone that leads back home. */
 export function zoneBackSignSVG(): string {
-  return `<g class="signpost" data-go="garden" transform="translate(52 300)" role="button" aria-label="Указатель: вернуться домой, в сад">
+  return `<g class="signpost" data-go="garden" transform="translate(52 300)" role="button" tabindex="0" aria-label="Указатель: вернуться домой, в сад">
 <rect x="-34" y="-66" width="68" height="74" fill="transparent"/>
 ${shadow(12, 4, 1)}<rect x="-2.2" y="-52" width="4.4" height="52" fill="${C.woodDark}"/>
 <path d="M28 -54 H-14 L-24 -45 L-14 -36 H28Z" fill="#D9A06A" stroke="${C.woodDark}" stroke-width="1.6" stroke-linejoin="round"/>
@@ -460,7 +460,7 @@ ${shadow(12, 4, 1)}<rect x="-2.2" y="-52" width="4.4" height="52" fill="${C.wood
 
 /** Signpost in the vegetable patch that leads back to the garden. */
 export function backSignSVG(): string {
-  return `<g class="signpost" data-go="garden" transform="translate(52 330)" role="button" aria-label="Указатель: вернуться в сад">
+  return `<g class="signpost" data-go="garden" transform="translate(52 330)" role="button" tabindex="0" aria-label="Указатель: вернуться в сад">
 <rect x="-34" y="-66" width="68" height="74" fill="transparent"/>
 ${shadow(12, 4, 1)}<rect x="-2.2" y="-52" width="4.4" height="52" fill="${C.woodDark}"/>
 <path d="M26 -54 H-14 L-24 -45 L-14 -36 H26Z" fill="#D9A06A" stroke="${C.woodDark}" stroke-width="1.6" stroke-linejoin="round"/>
@@ -516,7 +516,7 @@ export function stallSVG(s: GameState): string {
   const badge = q
     ? `<g class="bob" transform="translate(32 -74)"><circle r="11" fill="#F6BE3B" stroke="#fff" stroke-width="2.4"/><text y="4.6" font-size="13" font-weight="900" text-anchor="middle" fill="#5A3A0A">${q}</text></g>`
     : '';
-  return `<g class="stall${q ? ' busy' : ''}" data-fair="1" transform="translate(${STALL.x} ${STALL.y})" role="button" aria-label="Ярмарка урожая: ${q ? `покупателей ждёт ${q}` : 'покупателей пока нет'}">
+  return `<g class="stall${q ? ' busy' : ''}" data-fair="1" transform="translate(${STALL.x} ${STALL.y})" role="button" tabindex="0" aria-label="Ярмарка урожая: ${q ? `покупателей ждёт ${q}` : 'покупателей пока нет'}">
 <rect x="-40" y="-90" width="80" height="98" fill="transparent"/>
 ${shadow(34, 7, 1)}
 <rect x="-28" y="-50" width="3.6" height="50" fill="${C.woodDark}"/><rect x="24.4" y="-50" width="3.6" height="50" fill="${C.woodDark}"/>
@@ -543,7 +543,7 @@ export function boardSVG(s: GameState): string {
   const have = o.items.reduce((n, it) => n + Math.min(it.have, it.need), 0);
   const need = o.items.reduce((n, it) => n + it.need, 0);
   const badge = done ? `<g transform="translate(22 -70)">${readyBadge()}</g>` : '';
-  return `<g class="board${done ? ' done' : ''}" data-board="1" transform="translate(${BOARD.x} ${BOARD.y})" role="button" aria-label="Доска просьб: ${done ? 'просьба выполнена' : `собрано ${have} из ${need}`}">
+  return `<g class="board${done ? ' done' : ''}" data-board="1" transform="translate(${BOARD.x} ${BOARD.y})" role="button" tabindex="0" aria-label="Доска просьб: ${done ? 'просьба выполнена' : `собрано ${have} из ${need}`}">
 <rect x="-34" y="-86" width="68" height="96" fill="transparent"/>
 ${shadow(24, 6, 1)}
 <rect x="-20" y="-40" width="4" height="40" fill="${C.woodDark}"/><rect x="16" y="-40" width="4" height="40" fill="${C.woodDark}"/>

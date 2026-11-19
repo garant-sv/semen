@@ -315,7 +315,7 @@ test('guests can be met; requests on the board can be fulfilled', async ({ page 
   await expect(page.locator('#petals')).toHaveText(String(9 + 6 + 7), { timeout: 5000 });
 
   await page.getByRole('button', { name: 'Коллекция' }).click();
-  await page.getByRole('button', { name: /Гости/ }).click();
+  await page.getByRole('tab', { name: /Гости/ }).click();
   await expect(page.locator('.card.book').filter({ hasText: 'Лягушка' })).toBeVisible();
   await expect(page.locator('.card.book.locked')).toHaveCount(14); // 15 guests, 1 met
   await shots(page, '10-guests');
@@ -1077,4 +1077,18 @@ test('several quests done at once come in one window', async ({ page }) => {
   await expect(page.getByText('+7')).toBeVisible();
   await page.getByRole('button', { name: 'Дальше!' }).click();
   await expect(page.locator('#sheetBackdrop')).toBeHidden();
+});
+
+test('keyboard: a bed opens with Enter, the window takes the focus, Esc closes it and the focus comes back', async ({ page }) => {
+  await start(page);
+  const bed = page.locator('[data-plot="0"]');
+  await bed.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Что посадим?' })).toBeVisible();
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe('sheetTitle');
+  // The garden behind the window cannot be reached.
+  expect(await page.evaluate(() => (document.querySelector('#stage') as HTMLElement).inert)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-plot'))).toBe('0');
 });

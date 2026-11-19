@@ -3338,3 +3338,28 @@ button.card:active {
   height: calc(var(--safe-bottom) + 24px);
   background: var(--cream);
 }
+
+/* ------------------------------------------------------------ accessibility review */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* Keyboard focus on the beds, signs and seeds of the scene. */
+#scene [role='button']:focus {
+  outline: none;
+}
+#scene [role='button']:focus-visible {
+  outline: 3px solid #1f5fbf;
+  outline-offset: 2px;
+}
+.sheet h2:focus {
+  outline: none;
+}
+/* The active menu item: 5.6:1 instead of 4.3:1. */
+.nav button.active {
+  color: #336630;
+}
