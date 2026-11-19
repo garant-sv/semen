@@ -67,7 +67,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches
         .open(CACHE)
-        .then((c) => c.match(new URL('./index.html', self.registration.scope).href))
+        // The page is precached as «./» (the scope itself); «./index.html» is kept as a fallback name.
+        .then((c) => c.match(self.registration.scope).then((r) => r || c.match(new URL('./index.html', self.registration.scope).href)))
         .then((cached) => cached || fetch(req)),
     );
     return;

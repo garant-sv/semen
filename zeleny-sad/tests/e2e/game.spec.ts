@@ -298,7 +298,7 @@ test('guests can be met; requests on the board can be fulfilled', async ({ page 
   await expect(page.locator('[data-guest="frog"]')).toBeVisible();
   await shots(page, '08-guest');
   await page.locator('[data-guest="frog"]').click({ force: true });
-  await expect(page.getByRole('heading', { name: 'Ты встретил лягушку!' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'В гостях: Лягушка!' })).toBeVisible();
   await page.getByRole('button', { name: 'Привет!' }).click();
   await expect(page.locator('#petals')).toHaveText('9', { timeout: 5000 });
 
@@ -431,7 +431,7 @@ test('map of natural zones: expedition to the tundra, zone plants and animals', 
   await expect(page.locator('[data-plot="10"]')).toHaveClass(/st-thirsty/);
   await page.evaluate(() => (window.__gardenApp as unknown as { spawnGuest(id: string, n: number): void }).spawnGuest('reindeer', Date.now()));
   await page.locator('[data-guest="reindeer"]').click({ force: true });
-  await expect(page.getByRole('heading', { name: 'Ты встретил северного оленя!' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'В гостях: Северный олень!' })).toBeVisible();
   await page.getByRole('button', { name: 'Привет!' }).click();
   await shots(page, '15-tundra');
   await page.locator('#view-tundra [data-go="garden"]').click();
@@ -1006,4 +1006,36 @@ test('a save from a newer version of the game is never overwritten', async ({ pa
   await expect(page.getByRole('heading', { name: 'Игра обновилась' })).toBeVisible();
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
   expect(JSON.parse((await page.evaluate(() => localStorage.getItem('green-garden/save')))!).petals).toBe(777);
+});
+
+test('opens without the internet after the first visit', async ({ page, context }) => {
+  await page.goto('/');
+  await onboard(page);
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) await new Promise((r) => navigator.serviceWorker.addEventListener('controllerchange', r));
+  });
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.locator('.quest-title')).toContainText('Задание');
+  await context.setOffline(false);
+});
+
+test('fair: letters get a word of help, a hint then a right answer is not «the second try»', async ({ page }) => {
+  await page.goto('/');
+  await onboard(page);
+  await page.evaluate(() => {
+    const app = window.__gardenApp as unknown as { state: { questIndex: number; fair: { queue: number; lastAt: number } }; showFair: () => void };
+    app.state.fair.queue = 1;
+    app.state.fair.lastAt = Date.now();
+    app.showFair();
+  });
+  await page.locator('.answer-input').fill('2,5');
+  await page.getByRole('button', { name: 'Проверить' }).click();
+  await expect(page.getByText('Напиши ответ только цифрами')).toBeVisible();
+  await page.getByRole('button', { name: 'Подсказка' }).click();
+  const answer = await page.evaluate(() => (window.__gardenApp as unknown as { fairTask: { problem: { answer: number } } }).fairTask.problem.answer);
+  await page.locator('.answer-input').fill(String(answer));
+  await page.getByRole('button', { name: 'Проверить' }).click();
+  await expect(page.getByText(/Верно, с подсказкой!/)).toBeVisible();
 });

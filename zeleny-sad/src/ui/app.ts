@@ -103,7 +103,7 @@ import {
 import { BADGES, earned, newBadges } from '../game/badges';
 import type { Question } from '../game/quiz';
 import { fairLevel, makeProblem, type MathProblem } from '../game/math';
-import { NO_LETTER, RULES, WORDS, viewWord, type RuleId } from '../game/russian';
+import { NO_LETTER, RULES, WORDS, viewWord, wordsForGrade, type RuleId } from '../game/russian';
 import {
   ICONS,
   SHARED_DEFS,
@@ -290,7 +290,8 @@ export class App {
   /** Garden news that happened while the game was in the background (shown on return). */
   private awayChanges: GrowthChange[] = [];
   /** Short screens (iPhone SE): the quest card folds itself after the first tap in the garden. */
-  private compact = window.innerHeight < 700;
+  // iPhone 13 in Safari has 664 px: the quest text must stay there, only really short screens fold it.
+  private compact = window.innerHeight < 600;
   /** Last touch anywhere: the hint finger waits for a quiet moment. */
   private lastTouchAt = 0;
   /** «Живое 2,5D»: parallax of the scene layers. */
@@ -1321,16 +1322,18 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
         return `<div class="card book${s.golden[id] ? ' has-gold' : ''}">${plantIcon(id, 3, 72)}<b>${def.name}${def.magic ? ' <span class="magic">волшебный</span>' : ''}</b><small>Собрано: ${e.count} ${gold}</small><p>${def.fact}</p></div>`;
     };
     if (this.collectionTab === 'words') {
-      const learned = new Set(s.rus.learned);
+      // Only the words of the child's class: «0 из 99» could never be reached in the 2nd class.
+      const gradeWords = wordsForGrade(gradeOf(s));
+      const learned = new Set(s.rus.learned.filter((id) => gradeWords.some((w) => w.id === id)));
       const groups = (Object.keys(RULES) as RuleId[])
         .map((rule) => {
-          const words = WORDS.filter((w) => w.rule === rule && learned.has(w.id));
-          const all = WORDS.filter((w) => w.rule === rule).length;
+          const words = gradeWords.filter((w) => w.rule === rule && learned.has(w.id));
+          const all = gradeWords.filter((w) => w.rule === rule).length;
           const chips = words.map((w) => `<span class="word-chip" title="${w.why.replace(/"/g, '&quot;')}">${viewWord(w).full}</span>`).join('');
           return `<h3 class="sub">${RULES[rule]} <span class="muted small">${words.length}/${all}</span></h3><div class="word-chips">${chips || '<span class="muted small">Пока пусто — заполняй таблички у грядок.</span>'}</div>`;
         })
         .join('');
-      body = `<p class="muted">Слова, которые ты правильно вписал на табличках: ${learned.size} из ${WORDS.length}. Таблички появляются у грядок после посадки.</p>${groups}`;
+      body = `<p class="muted">Слова, вписанные на табличках без ошибки: ${learned.size} из ${gradeWords.length}. Таблички появляются у грядок после посадки.</p>${groups}`;
     } else if (this.collectionTab === 'badges') {
       const cards = BADGES.map((b) => {
         const [n, goal] = b.progress(s);
@@ -1365,7 +1368,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const tab = (id: 'plants' | 'guests' | 'words' | 'badges', label: string, n: number, total: number) =>
       `<button type="button" class="tab${this.collectionTab === id ? ' active' : ''}" data-tab="${id}">${label} <span>${n}/${total}</span></button>`;
     const sheet = this.openSheet(
-      `<h2>Коллекция</h2><div class="tabs" role="tablist">${tab('plants', 'Растения', plantsFound, PLANT_IDS.length)}${tab('guests', 'Гости', guestsFound, GUEST_IDS.length)}${tab('words', 'Слова', s.rus.learned.length, WORDS.length)}${tab('badges', 'Значки', earned(s).length, BADGES.length)}</div>${body}`,
+      `<h2>Коллекция</h2><div class="tabs" role="tablist">${tab('plants', 'Растения', plantsFound, PLANT_IDS.length)}${tab('guests', 'Гости', guestsFound, GUEST_IDS.length)}${tab('words', 'Слова', wordsForGrade(gradeOf(s)).filter((w) => s.rus.learned.includes(w.id)).length, wordsForGrade(gradeOf(s)).length)}${tab('badges', 'Значки', earned(s).length, BADGES.length)}</div>${body}`,
     );
     sheet.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -1422,7 +1425,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
 <div class="answers${pics ? ' with-pics' : ''}">${options
       .map((o, i) => `<button type="button" class="btn wide answer" data-answer="${i}">${pics ? `<span class="pic" aria-hidden="true">${pics[q.options.indexOf(o)]}</span>` : ''}<span>${o}</span></button>`)
       .join('')}</div>
-<p class="muted small center">Это из «Окружающего мира» за ${gradeOf(this.state)} класс. Ошибиться не страшно — Листик подскажет.</p>`);
+<p class="muted small center">${gradeOf(this.state) >= 5 ? 'Вопрос о природе, как на уроках биологии.' : 'Вопрос из «Окружающего мира».'} Ошибиться не страшно — Листик подскажет.</p>`);
     this.autoSay(spoken);
     sheet.querySelectorAll<HTMLButtonElement>('[data-answer]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -1506,7 +1509,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const now = this.now();
     advanceFair(s, now);
     play('tap');
-    const level = fairLevel(s.fair.solved, gradeOf(s));
+    const level = fairLevel(s.fair.solved, gradeOf(s), s.fair.ease);
     if (s.fair.queue <= 0) {
       this.openSheet(`<div class="sheet-hero">${listik(64)}</div><p class="eyebrow">Ярмарка урожая · уровень ${level}</p><h2>Покупателей пока нет</h2><p>Следующий придёт через ${Math.ceil(nextCustomerIn(s, now) / 1000)} с. А пока можно поливать и собирать урожай!</p><p class="muted">Решено задач: ${s.fair.solved}, с первой попытки: ${s.fair.firstTry}.</p>`);
       return;
@@ -1546,7 +1549,9 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
           ? `Правильный ответ: ${p.answerText}. +${served.petals} за старание`
           : r === 'first'
             ? `Верно! +${served.petals}`
-            : `Верно, со второй попытки! +${served.petals}`;
+            : task.tries === 0
+              ? `Верно, с подсказкой! +${served.petals}`
+              : `Верно, со второй попытки! +${served.petals}`;
       const said = `${r === 'failed' ? `Правильный ответ: ${p.answerText}.` : 'Верно!'} Решение: ${p.solution}`;
       result.innerHTML = `<div class="explain ${r === 'failed' ? 'try' : 'ok'}"><b>${title}${this.speakBtn(said)}</b><p>Решение: ${p.solution}</p><button type="button" class="btn primary wide" data-act="next">${more ? 'Следующий покупатель' : 'Готово'}</button></div>`;
       play(r === 'failed' ? 'tap' : 'quest');
@@ -1571,6 +1576,15 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
       const raw = input.value.replace(/\s/g, '');
       if (!/^\d+$/.test(raw)) {
         if (raw) track('fair_bad', { k: p.kind, len: raw.length, sep: /[.,]/.test(raw) });
+        // Say it in words too: the shake alone is invisible with «reduce motion» and tells nothing.
+        let note = sheet.querySelector<HTMLElement>('[data-format]');
+        if (!note) {
+          note = document.createElement('p');
+          note.className = 'muted small center';
+          note.dataset.format = '';
+          result.before(note);
+        }
+        note.textContent = raw ? 'Напиши ответ только цифрами, например: 25.' : 'Сначала напиши ответ в окошко.';
         input.classList.remove('shake');
         void input.offsetWidth;
         input.classList.add('shake');
@@ -1704,7 +1718,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   private showGuestDiscovery(id: GuestId, petals: number) {
     const def = GUESTS[id];
     play('quest');
-    const sheet = this.openSheet(`<div class="sheet-hero big">${guestIcon(id, 120)}</div><p class="eyebrow">Новый гость</p><h2>Ты встретил ${def.acc}!</h2><p>${def.fact}${this.speakBtn(def.fact)}</p><p class="muted center">За знакомство: +${petals}. Гость добавлен в «Коллекцию».</p><button type="button" class="btn primary wide" data-act="ok">Привет!</button>`);
+    const sheet = this.openSheet(`<div class="sheet-hero big">${guestIcon(id, 120)}</div><p class="eyebrow">Новый гость</p><h2>В гостях: ${def.name}!</h2><p>${def.fact}${this.speakBtn(def.fact)}</p><p class="muted center">За знакомство: +${petals}. Гость добавлен в «Коллекцию».</p><button type="button" class="btn primary wide" data-act="ok">Привет!</button>`);
     $(sheet, '[data-act="ok"]').addEventListener('click', () => this.closeSheet());
   }
 
@@ -1775,7 +1789,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
     this.flyPetals(gst.x, gst.y - 20, r.petals);
     this.commit();
     if (r.first) window.setTimeout(() => this.showGuestDiscovery(gst.id, r.petals), 600);
-    else this.toast(`${GUESTS[gst.id].name} ${gst.id === 'hedgehog' ? 'рад' : 'рада'} встрече! +${r.petals}`);
+    else this.toast(`${GUESTS[gst.id].name}: «Спасибо, что заметили!» +${r.petals}`);
   }
 
   private showDiscovery(id: PlantId) {
@@ -2043,7 +2057,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
 
   private showAbout() {
     this.openSheet(`<h2>Об игре</h2><p>«Зелёный сад» — уютная игра о том, как разбудить заброшенный волшебный сад. Сделана с любовью для юных садоводов.</p>
-<ul class="plain"><li>Без рекламы, покупок, регистрации и чатов.</li><li>Пока игра в тестировании, она отправляет обезличенный журнал: какой вопрос или задача попались, верно ли ответ, и ошибки программы. Имя и сад не отправляются. Выключить можно в Меню: «Помогать улучшать игру».</li><li>Растения не погибают, если долго не заходить.</li><li>Работает без интернета после первой загрузки.</li></ul>
+<ul class="plain"><li>Без рекламы, покупок, регистрации и чатов.</li><li>Пока игра в тестировании, она отправляет обезличенный журнал: какой вопрос или задача попались, верный ли ответ, и ошибки программы. Имя и сад не отправляются. Выключить можно в Меню: «Помогать улучшать игру».</li><li>Растения не погибают, если долго не заходить.</li><li>Работает без интернета после первой загрузки.</li></ul>
 <p class="muted small">Вся графика нарисована кодом специально для этой игры, звуки синтезируются в браузере. Сторонних картинок и шрифтов нет.</p>
 <p class="muted small">Голос Листика записан заранее нейросетью Vosk TTS (модель vosk-model-tts-ru-0.10-multi, голос № 1, Alpha Cephei, лицензия Apache 2.0); ударения — silero-stress (Silero Team, лицензия MIT). Если запись ещё не скачалась, читает голос телефона.</p>`);
   }
