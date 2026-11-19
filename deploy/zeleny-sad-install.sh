@@ -61,8 +61,13 @@ SRC="$(find "$TMP" -maxdepth 3 -type d -path '*/zeleny-sad/site' | head -1)"
 [ -n "$SRC" ] && [ -f "$SRC/index.html" ] || die "в архиве не найдена сборка zeleny-sad/site."
 
 RELEASE="$ROOT/releases/$(date +%Y%m%d-%H%M%S)"
+# Те же правила, что у самообновления: только обычные файлы веб-типов, без ссылок.
+if find "$SRC" ! -type d ! -type f | grep -q . \
+   || find "$SRC" -type f ! -regex '.*\.\(html\|js\|css\|json\|webmanifest\|png\|svg\|ico\|txt\|woff2\|webp\|jpg\)$' | grep -q .; then
+  die "в сборке неожиданные файлы (ссылки или незнакомые типы) — ничего не выкладываю."
+fi
 mkdir -p "$RELEASE" "$ROOT/acme"
-cp -a "$SRC/." "$RELEASE/"
+cp -r --no-preserve=mode,ownership "$SRC/." "$RELEASE/"
 chmod -R a+rX "$ROOT"
 ln -sfn "$RELEASE" "$ROOT/current.new" && mv -Tf "$ROOT/current.new" "$ROOT/current"
 # Храним три последних выпуска, чтобы можно было откатиться.
@@ -115,9 +120,23 @@ if [ -z "$CERT_DIR" ]; then
     --register-unsafely-without-email --keep-until-expiring
   CERT_DIR="/etc/letsencrypt/live/$DOMAIN"
 fi
+# После продления сертификата nginx должен его перечитать, иначе через ~90 дней сайт перестанет
+# открываться. Хук certbot вызывает сам после каждого продления; reload — только если конфиг цел.
+if [ -d /etc/letsencrypt ]; then
+  mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+  cat > /etc/letsencrypt/renewal-hooks/deploy/zeleny-sad-nginx-reload.sh <<'HOOK'
+#!/bin/sh
+# Ставит deploy/zeleny-sad-install.sh: после продления любого сертификата nginx перечитывает его.
+nginx -t >/dev/null 2>&1 && systemctl reload nginx
+HOOK
+  chmod 755 /etc/letsencrypt/renewal-hooks/deploy/zeleny-sad-nginx-reload.sh
+fi
 
+command -v python3 >/dev/null || { apt-get update -qq && apt-get install -y -qq python3; }
 mkdir -p "$LOG_DIR" "$ETC"
 chmod 750 "$LOG_DIR"
+# Здесь лежит копия журнала (logs-repo.git) и ключ — только для root.
+chmod 700 "$ETC"
 
 # Заголовки безопасности. В nginx add_header внутри location отменяет заголовки сервера,
 # поэтому этот набор повторяется в каждом location, где есть свой add_header.
@@ -127,14 +146,36 @@ SEC="add_header Content-Security-Policy \"$CSP\" always;
         add_header X-Content-Type-Options nosniff always;
         add_header Referrer-Policy no-referrer always;
         add_header Cross-Origin-Opener-Policy same-origin always;
-        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()\" always;"
+        add_header Strict-Transport-Security \"max-age=31536000\" always;
+        add_header Cross-Origin-Resource-Policy same-origin always;
+        add_header Permissions-Policy \"camera=(), microphone=(), geolocation=(), payment=(), usb=(), display-capture=(), browsing-topics=(), interest-cohort=()\" always;"
 
 say "Настраиваю nginx только для $DOMAIN"
 {
   cat <<'EOF'
 # Журнал игры: только время, версия, случайный номер устройства и события. Без IP и браузера.
 log_format zeleny_events escape=json '{"ts":"$time_iso8601","v":"$arg_v","d":"$arg_d","b":"$arg_b"}';
-limit_req_zone $binary_remote_addr zone=zeleny_api:1m rate=2r/s;
+# Ограничение темпа: IPv4 — по адресу, IPv6 — по сети /64 (иначе адрес меняется без труда).
+# Класс за одним школьным адресом не должен упираться в лимит, поэтому он щедрый.
+map $binary_remote_addr $zeleny_rl_key {
+    "~(?s)^(?P<net6>.{8}).{8}$" $net6;
+    default $binary_remote_addr;
+}
+limit_req_zone $zeleny_rl_key zone=zeleny_api:2m rate=10r/s;
+# В журнал пишем только запросы игры: разумной длины (игра шлёт не больше ~1800 символов)
+# и с настоящим номером устройства (12 знаков 0-9a-f). Остальное получает 204 без записи.
+map $request_uri $zeleny_len_ok {
+    "~^.{0,2100}$" 1;
+    default 0;
+}
+map $arg_d $zeleny_dev_ok {
+    "~^[0-9a-f]{12}$" 1;
+    default 0;
+}
+map "$zeleny_len_ok$zeleny_dev_ok" $zeleny_ev_ok {
+    "11" 1;
+    default 0;
+}
 
 EOF
   http_block
@@ -151,14 +192,24 @@ $( [ "$LISTEN6" = 1 ] && echo '    listen [::]:443 ssl;' )
     root $ROOT/current;
     index index.html;
     server_tokens off;
-    # Детям — никаких журналов с адресами: обычный access_log для игры выключен.
+    # Детям — никаких журналов с адресами: обычный access_log для игры выключен, а в журнал
+    # ошибок (там nginx пишет IP) попадают только поломки самого сервера, не запросы детей.
     access_log off;
+    error_log $LOG_DIR/nginx-error.log crit;
+    log_not_found off;
 
     # Обезличенный журнал игры (см. src/telemetry.ts). Ничего не отдаёт, только записывает.
     location = /api/e {
-        limit_req zone=zeleny_api burst=30 nodelay;
+        # return сработал бы раньше лимита (фаза rewrite), поэтому ответ — в отдельном месте,
+        # куда запрос попадает уже после проверки темпа.
+        limit_req zone=zeleny_api burst=60 nodelay;
         limit_req_status 429;
-        access_log $LOG_DIR/events.log zeleny_events;
+        limit_req_log_level info;
+        access_log off;
+        try_files /.zeleny-none @zeleny_event;
+    }
+    location @zeleny_event {
+        access_log $LOG_DIR/events.log zeleny_events if=\$zeleny_ev_ok;
         add_header Cache-Control "no-store" always;
         return 204;
     }
@@ -184,6 +235,17 @@ $( [ "$LISTEN6" = 1 ] && echo '    listen [::]:443 ssl;' )
     location /assets/ {
         $SEC
         add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files \$uri =404;
+    }
+    # Озвучка и картинки: нет файла — честный 404, а не страница игры (иначе сервис-воркер
+    # мог бы сохранить HTML вместо пакета голоса).
+    location /voice/ {
+        $SEC
+        try_files \$uri =404;
+    }
+    location /icons/ {
+        $SEC
+        try_files \$uri =404;
     }
 
     location / {
@@ -209,23 +271,51 @@ if [ -s "$LOG_DIR/events.log" ]; then
   mv "$LOG_DIR/events.log" "$LOG_DIR/events.$DAY.raw"
   [ -s /run/nginx.pid ] && kill -USR1 "$(cat /run/nginx.pid)"
   sleep 2
-  python3 - "$LOG_DIR/events.$DAY.raw" >> "$LOG_DIR/days/$DAY.jsonl" <<'PY'
-import json, sys, urllib.parse
+  # Пишем во временный файл и добавляем целиком: упавший разбор не оставит половину дня.
+  python3 - "$LOG_DIR/events.$DAY.raw" > "$LOG_DIR/days/.$DAY.part" <<'PY'
+import json, re, sys, urllib.parse
+# Только известные поля и простые значения: журнал читает ИИ, поэтому чужой текст в нём
+# не должен выглядеть как указание, а серверные поля (srv, v, dev) клиент подменить не может.
+KEYS = {'e', 't', 'g', 'id', 'ok', 'pick', 'n', 'k', 'lvl', 'r', 'hint', 'ans', 'want', 'len', 'sep',
+        'st', 'mig', 'q', 'pwa', 'w', 'ua', 'ya', 'first', 'named', 'hat', 'pet', 'kind', 'msg', 'at'}
+EVENTS = {'start', 'save_error', 'seeds', 'gardener', 'quiz', 'sign', 'fair', 'fair_bad', 'fair_try',
+          'profile', 'quest', 'error'}
+DEV = re.compile(r'^[0-9a-f]{12}$')
+VER = re.compile(r'^[0-9A-Za-z.\-]{1,24}$')
+MAX_PER_DEV = 3000
+per_dev = {}
+def clean(v):
+    if v is None or isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return v if abs(v) < 1e13 else None
+    if isinstance(v, str):
+        return v[:160]
+    return None
 for line in open(sys.argv[1], encoding='utf-8', errors='replace'):
     try:
         row = json.loads(line)
         batch = json.loads(urllib.parse.unquote(row.get('b', '')))
     except Exception:
         continue
-    if not isinstance(batch, list):
+    dev, ver = str(row.get('d', '')), str(row.get('v', ''))
+    if not isinstance(batch, list) or not DEV.match(dev) or not VER.match(ver):
         continue
     for ev in batch[:50]:
-        if isinstance(ev, dict):
-            ev = {k: v for k, v in ev.items() if k != 'nick'}
-            print(json.dumps({'srv': row.get('ts'), 'v': row.get('v'), 'dev': row.get('d'), **ev}, ensure_ascii=False))
+        if not isinstance(ev, dict) or ev.get('e') not in EVENTS:
+            continue
+        per_dev[dev] = per_dev.get(dev, 0) + 1
+        if per_dev[dev] > MAX_PER_DEV:
+            continue
+        out = {'srv': row.get('ts'), 'v': ver, 'dev': dev}
+        out.update({k: clean(v) for k, v in ev.items() if k in KEYS})
+        print(json.dumps(out, ensure_ascii=False))
 PY
-  rm -f "$LOG_DIR/events.$DAY.raw"
+  cat "$LOG_DIR/days/.$DAY.part" >> "$LOG_DIR/days/$DAY.jsonl"
+  rm -f "$LOG_DIR/days/.$DAY.part" "$LOG_DIR/events.$DAY.raw"
 fi
+# Необработанные остатки (если разбор падал) и старые дни не копим.
+find "$LOG_DIR" -maxdepth 1 -name 'events.*.raw' -mtime +7 -delete
 find "$LOG_DIR/days" -name '*.jsonl' -mtime +60 -delete
 REPO="$(cat "$ETC/logs-repo" 2>/dev/null || true)"
 if [ -n "$REPO" ] && [ -f "$ETC/logs_key" ]; then
