@@ -105,6 +105,10 @@ server {
     listen 80;
 $( [ "$LISTEN6" = 1 ] && echo '    listen [::]:80;' )
     server_name $DOMAIN;
+    # Как и на https: без IP и адресов детей в общем журнале nginx.
+    access_log off;
+    error_log $LOG_DIR/nginx-error.log crit;
+    server_tokens off;
     location /.well-known/acme-challenge/ { root $ROOT/acme; }
     location / { return 301 https://\$host\$request_uri; }
 }
@@ -276,8 +280,9 @@ if [ -s "$LOG_DIR/events.log" ]; then
   mv "$LOG_DIR/events.log" "$LOG_DIR/events.$DAY.raw"
   [ -s /run/nginx.pid ] && kill -USR1 "$(cat /run/nginx.pid)"
   sleep 2
-  # Пишем во временный файл и добавляем целиком: упавший разбор не оставит половину дня.
-  python3 - "$LOG_DIR/events.$DAY.raw" > "$LOG_DIR/days/.$DAY.part" <<'PY'
+  # Пишем во временный файл и добавляем целиком: упавший разбор не оставит половину дня,
+  # и не остановит отправку прошлых дней.
+  if python3 - "$LOG_DIR/events.$DAY.raw" > "$LOG_DIR/days/.$DAY.part" <<'PY'
 import json, re, sys, urllib.parse
 # Только известные поля и простые значения: журнал читает ИИ, поэтому чужой текст в нём
 # не должен выглядеть как указание, а серверные поля (srv, v, dev) клиент подменить не может.
@@ -289,13 +294,19 @@ DEV = re.compile(r'^[0-9a-f]{12}$')
 VER = re.compile(r'^[0-9A-Za-z.\-]{1,24}$')
 MAX_PER_DEV = 3000
 per_dev = {}
-def clean(v):
+ID = re.compile(r'^[0-9A-Za-z_.\-]{1,40}$')
+def clean(k, v, e):
     if v is None or isinstance(v, bool):
         return v
     if isinstance(v, (int, float)):
         return v if abs(v) < 1e13 else None
     if isinstance(v, str):
-        return v[:160]
+        if k == 'id' and not ID.match(v):
+            return None
+        if k == 'msg' and e != 'error':
+            return None
+        # Одиночная половинка эмодзи (обрезанная строка) не должна ронять весь разбор.
+        return v[:160].encode('utf-8', 'replace').decode('utf-8')
     return None
 for line in open(sys.argv[1], encoding='utf-8', errors='replace'):
     try:
@@ -307,20 +318,29 @@ for line in open(sys.argv[1], encoding='utf-8', errors='replace'):
     if not isinstance(batch, list) or not DEV.match(dev) or not VER.match(ver):
         continue
     for ev in batch[:50]:
-        if not isinstance(ev, dict) or ev.get('e') not in EVENTS:
+        try:
+            e = ev.get('e') if isinstance(ev, dict) else None
+            if not isinstance(e, str) or e not in EVENTS:
+                continue
+            per_dev[dev] = per_dev.get(dev, 0) + 1
+            if per_dev[dev] > MAX_PER_DEV:
+                continue
+            out = {'srv': clean('ts', row.get('ts'), e), 'v': ver, 'dev': dev}
+            out.update({k: clean(k, v, e) for k, v in ev.items() if k in KEYS})
+            print(json.dumps(out, ensure_ascii=False))
+        except Exception:
             continue
-        per_dev[dev] = per_dev.get(dev, 0) + 1
-        if per_dev[dev] > MAX_PER_DEV:
-            continue
-        out = {'srv': row.get('ts'), 'v': ver, 'dev': dev}
-        out.update({k: clean(v) for k, v in ev.items() if k in KEYS})
-        print(json.dumps(out, ensure_ascii=False))
 PY
-  cat "$LOG_DIR/days/.$DAY.part" >> "$LOG_DIR/days/$DAY.jsonl"
-  rm -f "$LOG_DIR/days/.$DAY.part" "$LOG_DIR/events.$DAY.raw"
+  then
+    cat "$LOG_DIR/days/.$DAY.part" >> "$LOG_DIR/days/$DAY.jsonl"
+    rm -f "$LOG_DIR/days/.$DAY.part" "$LOG_DIR/events.$DAY.raw"
+  else
+    echo "разбор журнала за $DAY не удался, сырой файл оставлен на 7 дней"
+    rm -f "$LOG_DIR/days/.$DAY.part"
+  fi
 fi
 # Необработанные остатки (если разбор падал) и старые дни не копим.
-find "$LOG_DIR" -maxdepth 1 -name 'events.*.raw' -mtime +7 -delete
+find "$LOG_DIR" -maxdepth 1 \( -name 'events.*.raw' -o -name 'events.log.big' \) -mtime +7 -delete
 find "$LOG_DIR/days" -name '*.jsonl' -mtime +60 -delete
 REPO="$(cat "$ETC/logs-repo" 2>/dev/null || true)"
 if [ -n "$REPO" ] && [ -f "$ETC/logs_key" ]; then
@@ -330,7 +350,9 @@ if [ -n "$REPO" ] && [ -f "$ETC/logs_key" ]; then
   cd "$W"
   git pull -q --rebase || true
   mkdir -p days
-  cp "$LOG_DIR"/days/*.jsonl days/ 2>/dev/null || true
+  # Файл больше 20 МБ GitHub примет плохо (а больше 100 МБ сломает отправку навсегда): такой день остаётся на сервере.
+  find "$LOG_DIR/days" -maxdepth 1 -name '*.jsonl' -size -20M -exec cp {} days/ \;
+  find "$LOG_DIR/days" -maxdepth 1 -name '*.jsonl' -size +20M -printf 'день %f больше 20 МБ, в репозиторий не отправлен\n'
   find days -name '*.jsonl' -mtime +60 -delete
   git add -A days
   git -c user.name="zeleny-sad server" -c user.email="noreply@kvestapp.ru" commit -qm "Журнал за $DAY" || true
@@ -338,7 +360,11 @@ if [ -n "$REPO" ] && [ -f "$ETC/logs_key" ]; then
 fi
 JOURNAL
 chmod 700 "$ETC/journal-daily.sh"
-echo '5 0 * * * root /etc/zeleny-sad/journal-daily.sh >> /var/log/zeleny-sad/journal-daily.out 2>&1' > /etc/cron.d/zeleny-sad-journal
+{
+  echo '5 0 * * * root /etc/zeleny-sad/journal-daily.sh >> /var/log/zeleny-sad/journal-daily.out 2>&1'
+  # Предел размера журнала за день (200 МБ): лишнее откладывается в сторону и не заполняет диск.
+  echo '*/15 * * * * root f=/var/log/zeleny-sad/events.log; [ "$(stat -c \%s "$f" 2>/dev/null || echo 0)" -gt 209715200 ] && mv "$f" "$f.big" && [ -s /run/nginx.pid ] && kill -USR1 "$(cat /run/nginx.pid)"'
+} > /etc/cron.d/zeleny-sad-journal
 chmod 644 /etc/cron.d/zeleny-sad-journal
 
 say "Самообновление игры"

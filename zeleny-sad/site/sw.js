@@ -1,10 +1,10 @@
 /* Service worker for «Зелёный сад». Generated at build time from src/sw/sw-template.js. */
-const VERSION = '17ff4b3df6d1';
+const VERSION = '6b45c356337a';
 const CACHE = 'green-garden-' + VERSION;
 const PRECACHE = [
   "./",
+  "./assets/index-B8ONswbL.js",
   "./assets/index-BfOsvgBj.css",
-  "./assets/index-CwiUgcjX.js",
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -111,7 +111,7 @@ self.addEventListener('fetch', (event) => {
       const cached = await cache.match(req, { ignoreSearch: true });
       if (cached) return cached;
       const res = await fetch(req);
-      if (res.ok && res.type === 'basic' && (!isHtml(res) || url.pathname.endsWith('.html'))) {
+      if (res.ok && res.type === 'basic' && (!isHtml(res) || url.pathname.endsWith('/index.html'))) {
         cache.put(req, res.clone()).catch(() => {});
       }
       return res;
