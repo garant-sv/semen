@@ -339,6 +339,7 @@ export class App {
     <g id="l-sky"></g><g id="l-lights"></g><g id="l-fx"></g>
   </svg>
   <div class="mode-chip" id="modeChip" hidden></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 </main>
 <nav class="nav" aria-label="Меню игры">
   <button type="button" data-nav="garden" class="active">${ICONS.garden}<span>Сад</span></button>
@@ -348,8 +349,9 @@ export class App {
   <button type="button" data-nav="menu">${ICONS.menu}<span>Меню</span></button>
 </nav>
 <div class="sheet-backdrop" id="sheetBackdrop" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
-<div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="fly-layer" id="flyLayer" aria-hidden="true"></div>
+<div class="fly-layer confetti-layer" id="confettiLayer" aria-hidden="true"></div>
+<div class="rotate-hint" aria-hidden="true">${listik(72)}<p>Поверни телефон —<br>сад живёт вертикально</p></div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>`;
 
     const items = [
@@ -486,7 +488,8 @@ export class App {
   private fitScene(w: number, h: number) {
     if (!w || !h) return;
     const visible = (400 * h) / w;
-    const MAX_CROP = 150;
+    // Wide screens (tablet, computer) lose less sky, so the treetops along the fence stay whole.
+    const MAX_CROP = w / h > 0.9 ? 90 : 150;
     let vb: string;
     if (visible >= 640) vb = `0 ${640 - visible} 400 ${visible}`;
     else if (visible >= 640 - MAX_CROP) vb = `0 ${640 - visible} 400 ${visible}`;
@@ -1697,7 +1700,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
     const sheet = this.openSheet(`<h2>Карта природных зон</h2><p class="muted">Россия с севера на юг. Чем южнее, тем теплее. Нажми на зону, чтобы узнать о ней.</p>
 <div class="map-wrap"><svg class="map" viewBox="0 0 320 ${bandH * ZONE_ATLAS.length}" role="group" aria-label="Природные зоны">${bands}<g pointer-events="none"><text x="306" y="16" font-size="11" text-anchor="end" fill="#6B5A43">Север ↑</text><text x="306" y="${bandH * ZONE_ATLAS.length - 6}" font-size="11" text-anchor="end" fill="#6B5A43">Юг ↓</text></g></svg></div>
 <div id="zoneCard"></div>`);
-    const show = (id: string) => {
+    const show = (id: string, scroll = true) => {
       const z = ZONE_ATLAS.find((x) => x.id === id)!;
       const zone = (ZONE_IDS as readonly string[]).includes(id) ? (id as ZoneId) : null;
       let action = '';
@@ -1716,7 +1719,8 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
         this.closeSheet();
         this.showRestoreSheet(zone!);
       });
-      card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      // Only when the child picked a zone: on opening, the map's title must stay in sight.
+      if (scroll) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     };
     sheet.querySelectorAll<SVGGElement>('[data-zone]').forEach((g) =>
       g.addEventListener('click', () => {
@@ -1724,7 +1728,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
         show(g.dataset.zone!);
       }),
     );
-    show(this.view === 'garden' || this.view === 'veg' ? 'mixed' : this.view);
+    show(this.view === 'garden' || this.view === 'veg' ? 'mixed' : this.view, false);
   }
 
   private showGuestDiscovery(id: GuestId, petals: number) {
@@ -2317,7 +2321,8 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   /** A short burst of falling leaves and petals over the whole screen. */
   private confetti() {
     if (reducedMotion()) return;
-    const layer = $(this.root, '#flyLayer');
+    // Under the windows: confetti must not fly across the text of the reward.
+    const layer = $(this.root, '#confettiLayer');
     const colors = ['#F59AAA', '#F6BE3B', '#93C76B', '#8C92E6', '#6EC1D9', '#FFFDF5'];
     for (let i = 0; i < 28; i++) {
       const el = document.createElement('i');
