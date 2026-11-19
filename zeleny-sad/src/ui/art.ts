@@ -412,7 +412,7 @@ export function brambles(): string {
   ];
   return `${vines
     .map((d) => `<path d="${d}" stroke="#4A5E2E" stroke-width="3.4" fill="none" stroke-linecap="round"/>`)
-    .join('')}${thorns.map(([x, y]) => leaf(x, y, 9, -60 + x, '#6E7F3E', false)).join('')}<g transform="translate(30 -8)"><rect x="-1.6" y="-26" width="3.2" height="28" fill="${C.woodDark}"/><rect x="-11" y="-34" width="22" height="13" rx="2" fill="#D9B98A" stroke="${C.woodDark}" stroke-width="1.2"/><path d="M-6 -27.5 h12" stroke="${C.woodDark}" stroke-width="1.4" stroke-dasharray="2 2"/></g>`;
+    .join('')}${thorns.map(([x, y]) => leaf(x, y, 9, -60 + x, '#6E7F3E', false)).join('')}<g transform="translate(30 -8)"><rect x="-1.6" y="-26" width="3.2" height="28" fill="${C.woodDark}"/><rect x="-11" y="-34" width="22" height="13" rx="2" fill="#D9B98A" stroke="${C.woodDark}" stroke-width="1.2"/><path d="M-4 -31 L4 -24 M4 -31 L-4 -24" stroke="#9A4A3A" stroke-width="1.8" stroke-linecap="round"/></g>`;
 }
 
 export function waterBadge(): string {

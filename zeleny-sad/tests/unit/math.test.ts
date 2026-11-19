@@ -178,3 +178,19 @@ describe('clarity helpers', () => {
     expect(fairKind(3, 4)).toBeUndefined();
   });
 });
+
+describe('Listik questions', () => {
+  it('a question is not asked again among the next few', async () => {
+    const { pickQuestion, answerQuiz } = await import('../../src/game/state');
+    const s = newGame(T0);
+    s.profile.grade = 3;
+    const rand = seeded(9);
+    const asked: string[] = [];
+    for (let i = 0; i < 40; i++) {
+      const q = pickQuestion(s, rand);
+      expect(asked.slice(-4)).not.toContain(q.id);
+      asked.push(q.id);
+      answerQuiz(s, q.id, 'неверно', T0); // always wrong: nothing is «solved»
+    }
+  });
+});

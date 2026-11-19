@@ -3363,3 +3363,11 @@ button.card:active {
 .nav button.active {
   color: #336630;
 }
+
+/* Decorations that cost more than the child has: say how much is missing. */
+.card.deco .need {
+  display: block;
+  margin-top: 4px;
+  color: #8a5a2b;
+  font-weight: 600;
+}
