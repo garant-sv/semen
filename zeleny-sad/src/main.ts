@@ -69,7 +69,11 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
           if (document.visibilityState === 'visible') void reg.update().catch(() => undefined);
         });
       })
-      .catch(() => app?.toast('Офлайн-режим недоступен в этом браузере.', 'warn'));
+      .catch((e: unknown) => {
+        // Only when the browser forbids it (private mode, a policy). A network hiccup is retried
+        // on its own the next time the game opens, and a child need not hear about it.
+        if (e instanceof DOMException && e.name === 'SecurityError') app?.toast('Без интернета игра в этом браузере не откроется.', 'warn');
+      });
   });
 }
 

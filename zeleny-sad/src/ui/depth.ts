@@ -104,7 +104,10 @@ export class Depth {
     // Let the resting position follow slowly, so holding the phone differently re-centres the garden.
     this.base.beta += (e.beta - this.base.beta) * 0.004;
     this.base.gamma += (e.gamma - this.base.gamma) * 0.004;
-    this.target = tiltOffset(e.beta, e.gamma, this.base);
+    const t = tiltOffset(e.beta, e.gamma, this.base);
+    // A dead zone: the hand always trembles a little, and that must not keep redrawing the sky.
+    if (Math.abs(t.x - this.target.x) < 0.03 && Math.abs(t.y - this.target.y) < 0.03) return;
+    this.target = t;
     this.kick();
   }
 
@@ -126,7 +129,7 @@ export class Depth {
     this.raf = 0;
     this.cur.x += (this.target.x - this.cur.x) * 0.12;
     this.cur.y += (this.target.y - this.cur.y) * 0.12;
-    const settled = Math.abs(this.target.x - this.cur.x) < 0.002 && Math.abs(this.target.y - this.cur.y) < 0.002;
+    const settled = Math.abs(this.target.x - this.cur.x) < 0.005 && Math.abs(this.target.y - this.cur.y) < 0.005;
     if (settled) this.cur = { ...this.target };
     this.apply();
     if (!settled) this.raf = requestAnimationFrame(() => this.step());
@@ -135,7 +138,11 @@ export class Depth {
   private apply() {
     for (const { el, key } of this.layers) {
       const t = layerShift(key, this.cur);
-      el.setAttribute('transform', t.x || t.y ? `translate(${t.x} ${t.y})` : '');
+      // A quarter of a unit is invisible; rounding lets equal frames skip the redraw.
+      const x = Math.round(t.x * 4) / 4;
+      const y = Math.round(t.y * 4) / 4;
+      const v = x || y ? `translate(${x} ${y})` : '';
+      if (el.getAttribute('transform') !== v) el.setAttribute('transform', v);
     }
   }
 }

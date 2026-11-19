@@ -263,6 +263,8 @@ export class App {
   private sheetOnClose: (() => void) | null = null;
   /** The open sheet must be answered: no close button, a tap outside does nothing. */
   private sheetLocked = false;
+  /** Last touch or key press, by the page's own clock (for the update restart). */
+  private lastInputAt = 0;
   /** Whether the request on the board already had all its flowers (to announce it only once). */
   private orderWasReady = false;
   /** Where the focus was before a window opened (it goes back there when the window closes). */
@@ -399,6 +401,7 @@ export class App {
     this.lastTouchAt = this.now();
     const wake = () => {
       this.lastTouchAt = this.now();
+      this.lastInputAt = performance.now();
       $(this.root, '#stage').classList.remove('sleepy');
     };
     this.root.addEventListener(
@@ -454,7 +457,13 @@ export class App {
       if (document.visibilityState === 'hidden') {
         this.hiddenAt = this.now();
         this.persist();
+        // Nobody sees the garden: no need to redraw it every second in the background.
+        clearInterval(this.tickTimer);
       } else {
+        if (!this.readOnly) {
+          clearInterval(this.tickTimer);
+          this.tickTimer = window.setInterval(() => this.refresh(false), 1000);
+        }
         const greet = this.now() - this.hiddenAt > 30_000;
         this.refresh(greet);
         if (!greet) this.awayChanges = [];
@@ -606,6 +615,7 @@ export class App {
     if (quiz) window.setTimeout(() => this.announce('У Листика есть вопрос для тебя! Нажми на Листика вверху.'), done.length ? 1600 : 500);
     for (const b of badges) window.setTimeout(() => this.announce(`Новый значок: «${b.name}»!`), 900);
     if (fairOpened) {
+      this.prepareVoice();
       window.setTimeout(() => {
         this.announce('Листик: у забора открылась Ярмарка урожая! К прилавку приходят покупатели — помоги им посчитать.');
         this.fx(ringFx(STALL.x, STALL.y - 40, '#FFF3B8', 40));
@@ -1224,7 +1234,8 @@ ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p
 
   /** True when nothing is open on top of the garden, so the game may restart itself to update. */
   isIdle(): boolean {
-    return $(this.root, '#sheetBackdrop').hidden;
+    // Not while Listik reads aloud, and not right under the finger of a child who is playing.
+    return $(this.root, '#sheetBackdrop').hidden && !isSpeaking() && performance.now() - this.lastInputAt > 3000;
   }
 
   closeSheet() {
@@ -2066,7 +2077,8 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
 
   /** Download Listik's recorded voice in the background (once) when reading aloud is on. */
   private prepareVoice() {
-    if (voiceOn(this.state)) void loadVoicePack();
+    // The numbers for the fair (the second, bigger part) only once the fair is open.
+    if (voiceOn(this.state)) void loadVoicePack(this.state.fair.lastAt > 0);
   }
 
   /** Large text for 2–3 class (or by the player's choice). */

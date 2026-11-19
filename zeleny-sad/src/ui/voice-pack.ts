@@ -49,6 +49,11 @@ let index: VoiceIndex | null = null;
 /** Downloaded packs (null until downloaded). */
 let packs: (ArrayBuffer | null)[] = [];
 let loading: Promise<boolean> | null = null;
+/**
+ * How many packs to download. The second pack (numbers for the fair, 17 MB) waits until the fair
+ * is open or a text needs it: on a slow phone network the first one is ready much sooner.
+ */
+let wanted = 1;
 let ctx: AudioContext | null = null;
 /** Bumped on every new text and on stop: playback of an older text stops scheduling itself. */
 let generation = 0;
@@ -96,28 +101,30 @@ export function recordedSupported(): boolean {
   return index !== null && packs[0] != null && audioClass() !== null;
 }
 
-const complete = () => index !== null && packs.length === index.packs.length && packs.every((p) => p !== null);
+const complete = () => index !== null && packs.slice(0, wanted).every((p) => p !== null);
 
 /**
- * Download the recorded voice (once). Resolves true when it is ready.
+ * Download the recorded voice (once): the first pack, or all of them with `all`. Resolves true when it is ready.
  * Safe to call many times; failures (offline on the first start) are retried on the next call.
  */
-export function loadVoicePack(base = 'voice/'): Promise<boolean> {
+export function loadVoicePack(all = false, base = 'voice/'): Promise<boolean> {
+  if (all) wanted = Infinity;
   if (complete()) return Promise.resolve(true);
   if (loading) return loading;
   if (!audioClass() || typeof fetch === 'undefined') return Promise.resolve(false);
   loading = (async () => {
     try {
+      // Through the service worker, so the files land in its cache, work offline later and are
+      // downloaded only once (on the very first start the worker takes over a moment later).
+      await serviceWorkerReady();
       if (!index) {
         const res = await fetch(`${base}voice.json`);
         if (!res.ok) return false;
         index = (await res.json()) as VoiceIndex;
         packs = index.packs.map(() => null);
       }
-      // Through the service worker, so the packs land in its cache and work offline later.
-      await serviceWorkerReady();
-      // One after the other: the first one (what is heard most) is ready sooner.
-      for (let i = 0; i < index.packs.length; i++) {
+      // One after the other: the first one (what is heard most) is ready sooner. `wanted` may grow meanwhile.
+      for (let i = 0; i < Math.min(wanted, index.packs.length); i++) {
         if (packs[i]) continue;
         const data = await fetch(`${base}${index.packs[i]}`);
         if (!data.ok) return false;
