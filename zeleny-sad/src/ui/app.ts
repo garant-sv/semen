@@ -260,6 +260,8 @@ export class App {
   private sheetOnClose: (() => void) | null = null;
   /** The open sheet must be answered: no close button, a tap outside does nothing. */
   private sheetLocked = false;
+  /** Where the focus was before a window opened (it goes back there when the window closes). */
+  private sheetReturnFocus: HTMLElement | null = null;
   /** Garden news waiting for the open window to close (see announce). */
   private pendingNews: string[] = [];
   private newsTimer = 0;
@@ -319,7 +321,7 @@ export class App {
     this.root.innerHTML = `${SHARED_DEFS}
 <div class="banner" id="banner" role="alert" hidden></div>
 <header class="hud">
-  <div class="petals" id="petalsBox" aria-label="Лепестки">${petalIcon(26)}<b id="petals">0</b></div>
+  <div class="petals" id="petalsBox"><span class="sr-only">Лепестки:</span>${petalIcon(26)}<b id="petals">0</b></div>
   <h1 class="title">Зелёный сад</h1>
   <div class="hud-right">
     <button class="mute-btn" id="muteBtn" type="button" aria-pressed="false" aria-label="Выключить звук">${ICONS.speaker}<svg class="mute-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4Z" fill="currentColor"/><path d="M15.5 9.5l5 5M20.5 9.5l-5 5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
@@ -328,7 +330,7 @@ export class App {
 </header>
 <section class="quest" id="quest" aria-live="polite"></section>
 <main class="stage" id="stage">
-  <svg id="scene" viewBox="0 0 400 640" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Сад">
+  <svg id="scene" viewBox="0 0 400 640" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Сад">
     <g id="view-garden"><g id="l-bg">${backgroundSVG()}</g><g id="l-brook"></g><g id="l-pond"></g><g id="l-bridge"></g><g id="l-board"></g><g id="l-stall"></g><g id="l-sign"></g><g id="l-wild"></g><g id="l-haze"></g><g id="l-objects"></g><g id="l-life"></g><g id="l-seeds"></g></g>
     <g id="view-veg" style="display:none"><g id="v-bg">${vegBackgroundSVG()}</g><g id="v-sign">${backSignSVG()}</g><g id="v-objects"></g></g>
     ${ZONE_IDS.map((z) => `<g id="view-${z}" style="display:none"><g>${zoneBackgroundSVG(z)}</g><g>${zoneBackSignSVG()}</g><g id="${z}-objects"></g></g>`).join('')}
@@ -377,6 +379,18 @@ export class App {
     }
 
     $(this.root, '#scene').addEventListener('click', (e) => this.onSceneClick(e));
+    // Keyboard: Enter or Space on a bed, a sign, a seed… works like a tap.
+    $(this.root, '#scene').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const el = (e.target as Element).closest('[role="button"]');
+      if (!el) return;
+      e.preventDefault();
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    // Esc closes a window that may be closed.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !$(this.root, '#sheetBackdrop').hidden && !this.sheetLocked) this.closeSheet();
+    });
     this.lastTouchAt = this.now();
     const wake = () => {
       this.lastTouchAt = this.now();
@@ -659,6 +673,7 @@ export class App {
     this.setLayer('sky', $(this.root, '#l-sky'), skySVG(this.phase));
     this.setLayer('lights', $(this.root, '#l-lights'), this.phase === 'day' ? '' : lightsSVG(this.lightSpots()));
     $(this.root, '#listikBtn').classList.toggle('has-question', s.quiz.pending);
+    $(this.root, '#listikBtn').setAttribute('aria-label', s.quiz.pending ? 'Листик: у меня вопрос!' : 'Листик: задание');
     this.setLayer('pond', $(this.root, '#l-pond'), pondSVG(s.restored.pond));
     this.setLayer('bridge', $(this.root, '#l-bridge'), bridgeSVG(s.restored.bridge));
     this.setLayer('wild', $(this.root, '#l-wild'), wildSVG(progress));
@@ -681,8 +696,14 @@ export class App {
     scene.classList.toggle('bridge-ready', !s.restored.bridge && landmarkAvailable(s, 'bridge'));
     scene.classList.toggle('pond-ready', !s.restored.pond && landmarkAvailable(s, 'pond'));
     this.root.querySelectorAll<HTMLButtonElement>('[data-nav]').forEach((b) => {
-      b.classList.toggle('active', b.dataset.nav === (this.mode === 'decor' ? 'decor' : 'garden'));
-      if (b.dataset.nav === 'decor') b.classList.toggle('dim', !decorAvailable(s));
+      const on = b.dataset.nav === (this.mode === 'decor' ? 'decor' : 'garden');
+      b.classList.toggle('active', on);
+      if (on) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+      if (b.dataset.nav === 'decor') {
+        b.classList.toggle('dim', !decorAvailable(s));
+        b.setAttribute('aria-disabled', String(!decorAvailable(s)));
+      }
     });
     this.renderQuest();
     this.renderModeChip();
@@ -937,7 +958,7 @@ export class App {
     return START_SEED_SPOTS.map((p, k) =>
       !seedLeft(this.state, k)
         ? ''
-        : `<g class="start-seed" data-seed="${k}" transform="translate(${p.x} ${p.y})" role="button" aria-label="Семечко на траве"><rect x="-22" y="-34" width="44" height="44" fill="transparent"/>${seedArt()}</g>`,
+        : `<g class="start-seed" data-seed="${k}" transform="translate(${p.x} ${p.y})" role="button" tabindex="0" aria-label="Семечко на траве"><rect x="-30" y="-42" width="60" height="60" fill="transparent"/>${seedArt()}</g>`,
     ).join('');
   }
 
@@ -974,9 +995,9 @@ export class App {
       `<button type="button" class="gd-opt" data-k="${key}" data-v="${val}" aria-label="${label}">${inner}</button>`;
     const html = `<p class="eyebrow">${first ? 'Новый садовник' : 'Мой садовник'}</p><h2>${first ? 'Каким будет твой садовник?' : 'Твой садовник'}</h2>
 <div class="gd-preview" data-preview></div>
-${row('Лицо', SKINS.map((c, i) => btn('skin', i, `<span class="swatch" style="background:${c}"></span>`, `Лицо ${i + 1}`)))}
+${row('Лицо', SKINS.map((c, i) => btn('skin', i, `<span class="swatch" style="background:${c}"></span>`, `Лицо: ${['светлое', 'смуглое', 'тёмное'][i] ?? i + 1}`)))}
 ${row('Шляпа', HATS.map((h) => btn('hat', h, hatIcon(h, OUTFITS[g.outfit], 46), HAT_NAMES[h])))}
-${row('Одежда', OUTFITS.map((c, i) => btn('outfit', i, `<span class="swatch" style="background:${c}"></span>`, `Цвет ${i + 1}`)))}
+${row('Одежда', OUTFITS.map((c, i) => btn('outfit', i, `<span class="swatch" style="background:${c}"></span>`, `Одежда: ${['зелёная', 'синяя', 'оранжевая', 'фиолетовая', 'малиновая'][i] ?? i + 1}`)))}
 ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p].name)))}
 <div class="gd-actions"><button type="button" class="btn wide" data-act="random">Случайно</button><button type="button" class="btn primary wide big" data-act="ok">${first ? 'В сад!' : 'Готово'}</button></div>`;
     const sheet = this.openSheet(html, then ? () => window.setTimeout(then, 200) : undefined);
@@ -1167,11 +1188,29 @@ ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p
     this.sheetLocked = Boolean(opts.locked);
     // Messages from before belong to the garden: they must not cover the window's title and «×».
     $(this.root, '#toasts').replaceChildren();
+    if (back.hidden) this.sheetReturnFocus = document.activeElement as HTMLElement | null;
     sheet.innerHTML = `${this.sheetLocked ? '' : `<button type="button" class="sheet-close" aria-label="Закрыть">${ICONS.close}</button>`}${html}`;
     back.hidden = false;
+    // For screen readers and the keyboard: the window has a name, the focus moves into it and
+    // the garden behind it cannot be reached until it is closed.
+    const title = sheet.querySelector('h2');
+    if (title) {
+      title.id = 'sheetTitle';
+      title.tabIndex = -1;
+      sheet.setAttribute('aria-labelledby', 'sheetTitle');
+    } else sheet.removeAttribute('aria-labelledby');
+    this.setBehindInert(true);
+    (title ?? sheet).focus({ preventScroll: true });
     this.sheetOnClose = onClose ?? null;
     sheet.querySelector('.sheet-close')?.addEventListener('click', () => this.closeSheet());
     return sheet;
+  }
+
+  private setBehindInert(on: boolean) {
+    for (const sel of ['header.hud', '#quest', '#stage', 'nav.nav']) {
+      const el = this.root.querySelector<HTMLElement>(sel);
+      if (el) el.inert = on;
+    }
   }
 
   /** True when nothing is open on top of the garden, so the game may restart itself to update. */
@@ -1184,6 +1223,10 @@ ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p
     if (back.hidden) return;
     back.hidden = true;
     this.sheetLocked = false;
+    this.setBehindInert(false);
+    const ret = this.sheetReturnFocus;
+    this.sheetReturnFocus = null;
+    if (ret && ret.isConnected) ret.focus({ preventScroll: true });
     stopSpeaking();
     this.flushNews();
     $(this.root, '#sheet').innerHTML = '';
@@ -1381,7 +1424,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       body = `<p class="muted">Встречено ${guestsFound} из ${GUEST_IDS.length}. Гости приходят ненадолго — нажми на гостя, чтобы познакомиться.</p>${groups.join('')}`;
     }
     const tab = (id: 'plants' | 'guests' | 'words' | 'badges', label: string, n: number, total: number) =>
-      `<button type="button" class="tab${this.collectionTab === id ? ' active' : ''}" data-tab="${id}">${label} <span>${n}/${total}</span></button>`;
+      `<button type="button" role="tab" aria-selected="${this.collectionTab === id}" class="tab${this.collectionTab === id ? ' active' : ''}" data-tab="${id}">${label} <span>${n}/${total}</span></button>`;
     const sheet = this.openSheet(
       `<h2>Коллекция</h2><div class="tabs" role="tablist">${tab('plants', 'Растения', plantsFound, PLANT_IDS.length)}${tab('guests', 'Гости', guestsFound, GUEST_IDS.length)}${tab('words', 'Слова', wordsForGrade(gradeOf(s)).filter((w) => s.rus.learned.includes(w.id)).length, wordsForGrade(gradeOf(s)).length)}${tab('badges', 'Значки', earned(s).length, BADGES.length)}</div>${body}`,
     );
@@ -1460,7 +1503,9 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
         const box = document.createElement('div');
         box.className = `explain ${r.correct ? 'ok' : 'try'}`;
         const said = `${r.correct ? 'Верно!' : `Почти! Правильный ответ: ${q.options[0]}.`} ${q.explain}`;
+        box.setAttribute('role', 'status');
         box.innerHTML = `<b>${r.correct ? `Верно! +${r.petals}` : `Почти! Правильный ответ: ${q.options[0]}. +${r.petals} за старание`}${this.speakBtn(said)}</b><p>${q.explain}</p><button type="button" class="btn primary wide" data-act="ok">${r.correct ? 'Ура!' : 'Понятно'}</button>`;
+        box.querySelector<HTMLElement>('[data-act="ok"]')?.focus({ preventScroll: true });
         $(sheet, '.answers').after(box);
         this.autoSay(said);
         $(box, '[data-act="ok"]').addEventListener('click', () => this.closeSheet());
@@ -1568,11 +1613,12 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
               ? `Верно, с подсказкой! +${served.petals}`
               : `Верно, со второй попытки! +${served.petals}`;
       const said = `${r === 'failed' ? `Правильный ответ: ${p.answerText}.` : 'Верно!'} Решение: ${p.solution}`;
-      result.innerHTML = `<div class="explain ${r === 'failed' ? 'try' : 'ok'}"><b>${title}${this.speakBtn(said)}</b><p>Решение: ${p.solution}</p><button type="button" class="btn primary wide" data-act="next">${more ? 'Следующий покупатель' : 'Готово'}</button></div>`;
+      result.innerHTML = `<div class="explain ${r === 'failed' ? 'try' : 'ok'}" role="status"><b>${title}${this.speakBtn(said)}</b><p>Решение: ${p.solution}</p><button type="button" class="btn primary wide" data-act="next">${more ? 'Следующий покупатель' : 'Готово'}</button></div>`;
       play(r === 'failed' ? 'tap' : 'quest');
       if (r === 'first') this.confetti();
       this.commit();
       this.bumpPetals();
+      $(result, '[data-act="next"]').focus({ preventScroll: true });
       $(result, '[data-act="next"]').addEventListener('click', () => {
         this.closeSheet();
         if (more) window.setTimeout(() => this.showFair(), 150);
@@ -1695,7 +1741,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
       const open = zone ? s.restored[zone] : home;
       const status = home ? '★ наш сад' : zone ? (open ? 'открыто' : landmarkAvailable(s, zone) ? 'можно отправиться!' : 'закрыто') : 'скоро';
       const dark = z.id === 'taiga';
-      return `<g class="band${open ? ' open' : ''}" data-zone="${z.id}" role="button" aria-label="${z.name}: ${status}"><rect x="0" y="${y}" width="320" height="${bandH}" fill="${z.color}"/><text x="14" y="${y + 24}" font-size="16" font-weight="800" fill="${dark ? '#FFF6E3' : '#3B2E1E'}">${z.name}</text><text x="14" y="${y + 42}" font-size="12" fill="${dark ? '#E3EFD6' : '#6B5A43'}">${status}</text>${zone && !open && landmarkAvailable(s, zone) ? `<circle class="pulse" cx="296" cy="${y + 27}" r="9" fill="#F6BE3B"/>` : ''}</g>`;
+      return `<g class="band${open ? ' open' : ''}" data-zone="${z.id}" role="button" tabindex="0" aria-label="${z.name}: ${status}"><rect x="0" y="${y}" width="320" height="${bandH}" fill="${z.color}"/><text x="14" y="${y + 24}" font-size="16" font-weight="800" fill="${dark ? '#FFF6E3' : '#3B2E1E'}">${z.name}</text><text x="14" y="${y + 42}" font-size="12" fill="${dark ? '#E3EFD6' : '#6B5A43'}">${status}</text>${zone && !open && landmarkAvailable(s, zone) ? `<circle class="pulse" cx="296" cy="${y + 27}" r="9" fill="#F6BE3B"/>` : ''}</g>`;
     }).join('');
     const sheet = this.openSheet(`<h2>Карта природных зон</h2><p class="muted">Россия с севера на юг. Чем южнее, тем теплее. Нажми на зону, чтобы узнать о ней.</p>
 <div class="map-wrap"><svg class="map" viewBox="0 0 320 ${bandH * ZONE_ATLAS.length}" role="group" aria-label="Природные зоны">${bands}<g pointer-events="none"><text x="306" y="16" font-size="11" text-anchor="end" fill="#6B5A43">Север ↑</text><text x="306" y="${bandH * ZONE_ATLAS.length - 6}" font-size="11" text-anchor="end" fill="#6B5A43">Юг ↓</text></g></svg></div>
