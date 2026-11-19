@@ -95,6 +95,7 @@ import {
   importSave,
   loadGame,
   saveGame,
+  SAVE_KEY,
   type LoadResult,
   type StorageError,
   type StorageLike,
@@ -280,7 +281,14 @@ export class App {
   private phase: DayPhase = 'day';
   private question: Question | null = null;
   /** The problem of the customer at the front of the queue (kept while the sheet is reopened). */
-  private fairTask: { problem: MathProblem; guest: GuestId } | null = null;
+  private fairTask: { problem: MathProblem; guest: GuestId; tries: number; hinted: boolean } | null = null;
+  /**
+   * Nothing is written to the device: the save belongs to a newer version, the damaged-save
+   * window is still waiting for an answer, or the garden is open in another tab.
+   */
+  private readOnly = false;
+  /** Garden news that happened while the game was in the background (shown on return). */
+  private awayChanges: GrowthChange[] = [];
   /** Short screens (iPhone SE): the quest card folds itself after the first tap in the garden. */
   private compact = window.innerHeight < 700;
   /** Last touch anywhere: the hint finger waits for a quiet moment. */
@@ -418,11 +426,49 @@ export class App {
         this.hiddenAt = this.now();
         this.persist();
       } else {
-        this.refresh(this.now() - this.hiddenAt > 30_000);
+        const greet = this.now() - this.hiddenAt > 30_000;
+        this.refresh(greet);
+        if (!greet) this.awayChanges = [];
       }
     });
     window.addEventListener('pagehide', () => this.persist());
     window.addEventListener('focus', () => this.refresh(false));
+    // Another tab saved the garden: this copy is old now, so it must not write over it.
+    window.addEventListener('storage', (e) => {
+      if (e.key === SAVE_KEY && e.newValue !== null && !this.readOnly) this.showOtherTab();
+    });
+  }
+
+  private showOtherTab() {
+    this.readOnly = true;
+    clearInterval(this.tickTimer);
+    stopSpeaking();
+    const sheet = this.openSheet(
+      `<div class="sheet-hero">${listik(64, 'wow')}</div><h2>Сад открыт в другом окне</h2><p>Играть можно только в одном окне, иначе сад запутается. Здесь он остановлен.</p>
+<button type="button" class="btn primary wide" data-act="here">Играть здесь</button>`,
+      undefined,
+      { locked: true },
+    );
+    $(sheet, '[data-act="here"]').addEventListener('click', () => location.reload());
+  }
+
+  private showNewerSave() {
+    this.readOnly = true;
+    const sheet = this.openSheet(
+      `<div class="sheet-hero">${listik(64, 'wow')}</div><h2>Игра обновилась</h2><p>Твой сад сохранён в новой версии игры. Нажми «Обновить», и он откроется.</p>
+<button type="button" class="btn primary wide" data-act="reload">Обновить</button>`,
+      undefined,
+      { locked: true },
+    );
+    $(sheet, '[data-act="reload"]').addEventListener('click', () => {
+      const go = () => location.reload();
+      if (!('serviceWorker' in navigator)) return go();
+      navigator.serviceWorker
+        .getRegistration()
+        .then((r) => r?.update())
+        .catch(() => {})
+        .finally(() => window.setTimeout(go, 1500));
+    });
   }
 
   /**
@@ -464,6 +510,10 @@ export class App {
     if (this.compact && this.state.questIndex > 0) this.questCollapsed = true;
     this.render();
     if (loaded.status === 'unavailable') this.setSaveError(loaded.error);
+    if (loaded.status === 'newer') {
+      this.showNewerSave();
+      return;
+    }
     if (loaded.status === 'corrupt') this.showCorruptSheet(loaded.error);
     else if (loaded.status === 'ok') {
       if (loaded.fromBackup) this.toast('Основное сохранение было повреждено — открыта предыдущая копия.', 'warn');
@@ -491,12 +541,21 @@ export class App {
     const queueBefore = this.state.fair.queue;
     advanceFair(this.state, now);
     if (this.state.fair.queue !== queueBefore) this.persist();
+    // In the background the browser may still tick (Android, computers): keep the news for
+    // the «while you were away» card instead of using it up unseen.
+    const hidden = document.visibilityState === 'hidden';
+    if (hidden) this.awayChanges.push(...changes);
     if (changes.length) {
       const done = checkQuests(this.state, now);
       this.persist();
       if (done.length) this.showQuestDone(done);
-      if (greet) this.welcomeBack(changes);
     }
+    if (greet && !hidden) {
+      const all = [...this.awayChanges, ...changes];
+      this.awayChanges = [];
+      if (all.length) this.welcomeBack(all);
+    }
+    if (this.awayChanges.length > 60) this.awayChanges = this.awayChanges.slice(-60);
     this.render();
     this.tickGuests(now);
   }
@@ -528,9 +587,12 @@ export class App {
   }
 
   private persist() {
+    if (this.readOnly) return;
     const r = saveGame(this.storage, this.state);
     if (r.ok) {
       if (this.saveError) this.setSaveError(null);
+    } else if (r.error.kind === 'newer') {
+      this.showNewerSave();
     } else {
       this.setSaveError(r.error);
     }
@@ -1452,11 +1514,11 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     if (!this.fairTask) {
       const pool = GUEST_IDS.filter((id) => GUESTS[id].area === 'garden' || s.guests[id]);
       const guest = pool[Math.floor(Math.random() * pool.length)];
-      this.fairTask = { guest, problem: makeProblem(level, Math.random, GUESTS[guest].name, undefined, gradeOf(s)) };
+      this.fairTask = { guest, problem: makeProblem(level, Math.random, GUESTS[guest].name, undefined, gradeOf(s)), tries: 0, hinted: false };
     }
-    const { problem: p, guest } = this.fairTask;
-    let tries = 0;
-    let hinted = false;
+    // Tries and the hint belong to this customer: closing and reopening the window keeps them.
+    const task = this.fairTask;
+    const { problem: p, guest } = task;
     let done = false;
     const sheet = this.openSheet(`<div class="fair-head">${guestIcon(guest, 84)}<div><p class="eyebrow">Ярмарка урожая · уровень ${level}</p><p class="small muted">Покупателей ждёт: ${s.fair.queue}</p></div></div>
 <div class="bubble">${p.text}${this.speakBtn(p.text)}</div>
@@ -1474,7 +1536,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
       done = true;
       const served = serveCustomer(this.state, r, this.now());
       this.fairTask = null;
-      track('fair', { k: p.kind, lvl: level, r, hint: hinted });
+      track('fair', { k: p.kind, lvl: level, r, hint: task.hinted });
       if (!served.ok) return;
       input.disabled = true;
       sheet.querySelectorAll<HTMLButtonElement>('.fair-buttons .btn').forEach((b) => (b.disabled = true));
@@ -1497,7 +1559,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
       });
     };
     const showHint = (lead: string) => {
-      hinted = true;
+      task.hinted = true;
       const box = document.createElement('p');
       box.className = 'hint-box';
       box.textContent = `${lead}${p.hint}`;
@@ -1515,10 +1577,10 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
         input.focus();
         return;
       }
-      if (Number(raw) === p.answer) return finish(tries === 0 && !hinted ? 'first' : 'second');
+      if (Number(raw) === p.answer) return finish(task.tries === 0 && !task.hinted ? 'first' : 'second');
       track('fair_try', { k: p.kind, lvl: level, ans: Number(raw), want: p.answer });
-      tries += 1;
-      if (tries >= 2) return finish('failed');
+      task.tries += 1;
+      if (task.tries >= 2) return finish('failed');
       play('error');
       showHint('Не совсем. Подсказка: ');
       input.select();
@@ -1529,7 +1591,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
     });
     $(sheet, '[data-act="check"]').addEventListener('click', check);
     $(sheet, '[data-act="hint"]').addEventListener('click', () => {
-      if (!done && !hinted) showHint('Подсказка: ');
+      if (!done && !task.hinted) showHint('Подсказка: ');
       input.focus();
     });
     window.setTimeout(() => input.focus(), 250);
@@ -2007,8 +2069,10 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
     const sheet = this.openSheet(`<div class="sheet-hero">${listik(64, 'wow')}</div><h2>Сохранение повреждено</h2><p>Не получилось открыть сохранённый сад: ${error}</p><p class="muted">Повреждённые данные мы отложили отдельно и не стёрли. Можно загрузить резервную копию или начать новый сад.</p>
 <button type="button" class="btn primary wide" data-act="import">Загрузить из копии</button>
 <button type="button" class="btn wide" data-act="new">Начать новый сад</button>`);
+    this.readOnly = true;
     $(sheet, '[data-act="import"]').addEventListener('click', () => $<HTMLInputElement>(this.root, '#importFile').click());
     $(sheet, '[data-act="new"]').addEventListener('click', () => {
+      this.readOnly = false;
       this.closeSheet();
       this.persist();
     });
@@ -2134,8 +2198,9 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
     const n = Math.max(1, Math.min(8, amount));
     const start = this.state.petals - amount;
     let arrived = 0;
+    // Another bunch may still be flying: then the counter goes on from where it is.
+    if (!this.flying) this.shownPetals = Math.max(0, start);
     this.flying++;
-    this.shownPetals = Math.max(0, start);
     $(this.root, '#petals').textContent = String(this.shownPetals);
     for (let i = 0; i < n; i++) {
       const el = document.createElement('div');
@@ -2158,7 +2223,9 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
       anim.onfinish = () => {
         el.remove();
         arrived++;
-        this.shownPetals = arrived === n ? this.state.petals : start + Math.round((amount * arrived) / n);
+        const share = Math.round((amount * arrived) / n) - Math.round((amount * (arrived - 1)) / n);
+        this.shownPetals = Math.min(this.state.petals, this.shownPetals + share);
+        if (arrived === n && this.flying === 1) this.shownPetals = this.state.petals;
         $(this.root, '#petals').textContent = String(this.shownPetals);
         play('tick');
         this.bumpPetals();

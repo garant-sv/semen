@@ -35,7 +35,7 @@ export interface StorageLike {
   removeItem(key: string): void;
 }
 
-export type StorageErrorKind = 'unavailable' | 'quota' | 'unknown';
+export type StorageErrorKind = 'unavailable' | 'quota' | 'unknown' | 'newer';
 
 export interface StorageError {
   kind: StorageErrorKind;
@@ -142,12 +142,17 @@ export const MIGRATIONS: Record<number, (raw: Raw) => Raw> = {
   8: (raw) => ({ ...raw, version: 9, gardener: null, startSeeds: 0 }),
 };
 
+/** The save was written by a newer version of the game: it is fine, this copy is just old. */
+export class NewerSaveError extends Error {
+  constructor() {
+    super('Сохранение сделано в более новой версии игры. Обнови игру, чтобы открыть его.');
+  }
+}
+
 export function migrate(raw: Raw): { data: Raw; from: number } {
   const from = typeof raw.version === 'number' ? raw.version : NaN;
   if (!Number.isInteger(from) || from < 1) throw new Error('Неизвестная версия сохранения.');
-  if (from > SAVE_VERSION) {
-    throw new Error('Сохранение сделано в более новой версии игры. Обнови игру, чтобы открыть его.');
-  }
+  if (from > SAVE_VERSION) throw new NewerSaveError();
   let data = raw;
   for (let v = from; v < SAVE_VERSION; v++) {
     const step = MIGRATIONS[v];
@@ -318,6 +323,8 @@ export type LoadResult =
   | { status: 'new'; state: GameState }
   | { status: 'ok'; state: GameState; migratedFrom: number | null; fromBackup: boolean }
   | { status: 'corrupt'; state: GameState; error: string }
+  /** Saved by a newer version (an old tab or cache): play nothing and never overwrite it. */
+  | { status: 'newer'; state: GameState; error: string }
   | { status: 'unavailable'; state: GameState; error: StorageError };
 
 export function loadGame(storage: StorageLike | null, now: number, storageError?: StorageError): LoadResult {
@@ -344,10 +351,11 @@ export function loadGame(storage: StorageLike | null, now: number, storageError?
       const { state, migratedFrom } = parseSave(main, now);
       return { status: 'ok', state, migratedFrom, fromBackup: false };
     } catch (e) {
+      if (e instanceof NewerSaveError) return { status: 'newer', state: newGame(now), error: e.message };
       mainError = (e as Error).message;
-      // Keep the damaged data aside instead of silently overwriting it.
+      // Keep the damaged data aside instead of silently overwriting it: one copy, not one per launch.
       try {
-        storage.setItem(CORRUPT_KEY_PREFIX + now, main);
+        if (storage.getItem(CORRUPT_KEY_PREFIX + 'last') !== main) storage.setItem(CORRUPT_KEY_PREFIX + 'last', main);
       } catch {
         /* nothing more we can do; the error is reported below */
       }
@@ -356,6 +364,13 @@ export function loadGame(storage: StorageLike | null, now: number, storageError?
   if (prev !== null) {
     try {
       const { state, migratedFrom } = parseSave(prev, now);
+      // Put the good copy back as the main save, so the next save keeps it as the backup
+      // instead of moving the damaged text there.
+      try {
+        storage.setItem(SAVE_KEY, prev);
+      } catch {
+        /* saving will report the storage problem */
+      }
       return { status: 'ok', state, migratedFrom, fromBackup: true };
     } catch {
       /* fall through */
@@ -371,11 +386,28 @@ export function saveGame(storage: StorageLike | null, s: GameState): SaveResult 
   try {
     const text = JSON.stringify(s);
     const current = storage.getItem(SAVE_KEY);
-    if (current !== null && current !== text) storage.setItem(PREV_KEY, current);
+    if (current !== null && current !== text) {
+      const v = savedVersion(current);
+      // A newer game saved here (another tab after an update): never overwrite it.
+      if (v !== null && v > SAVE_VERSION) return { ok: false, error: { kind: 'newer', message: 'Игра обновилась в другом окне.' } };
+      // Only a readable save becomes the backup; damaged text must not push the good copy out.
+      if (v !== null) storage.setItem(PREV_KEY, current);
+    }
     storage.setItem(SAVE_KEY, text);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: classifyStorageError(e) };
+  }
+}
+
+/** Version number of a saved text, or null when it is not a save at all. */
+function savedVersion(text: string): number | null {
+  try {
+    const raw = JSON.parse(text) as unknown;
+    if (!isObj(raw) || !Number.isInteger(raw.version) || (raw.version as number) < 1) return null;
+    return raw.version as number;
+  } catch {
+    return null;
   }
 }
 
