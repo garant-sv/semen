@@ -123,6 +123,8 @@ test('backup export and import', async ({ page }) => {
   // Start over, then restore the backup.
   await page.getByRole('button', { name: 'Начать сад заново' }).click();
   await page.getByRole('button', { name: 'Да, начать заново' }).click();
+  // A new garden of a 3–5 class child starts like the first one: with a gardener.
+  await makeGardener(page);
   await expect(page.locator('.quest-title')).toContainText('Задание 1 из 18');
 
   await page.locator('#importFile').setInputFiles(path);
@@ -1038,4 +1040,41 @@ test('fair: letters get a word of help, a hint then a right answer is not «the 
   await page.locator('.answer-input').fill(String(answer));
   await page.getByRole('button', { name: 'Проверить' }).click();
   await expect(page.getByText(/Верно, с подсказкой!/)).toBeVisible();
+});
+
+test('a quiet garden stops swaying after half a minute and wakes up on a touch', async ({ page }) => {
+  await start(page);
+  await expect(page.locator('#stage')).not.toHaveClass(/sleepy/);
+  await page.clock.runFor(31_000);
+  await expect(page.locator('#stage')).toHaveClass(/sleepy/);
+  await page.mouse.click(5, 5);
+  await expect(page.locator('#stage')).not.toHaveClass(/sleepy/);
+});
+
+test('messages never cover a window, and garden news waits for it', async ({ page }) => {
+  await start(page);
+  await page.evaluate(() => (window.__gardenApp as unknown as { toast: (t: string) => void }).toast('Старая новость'));
+  await expect(page.locator('.toast')).toHaveCount(1);
+  await page.locator('[data-plot="0"]').click();
+  await expect(page.getByRole('heading', { name: 'Что посадим?' })).toBeVisible();
+  await expect(page.locator('.toast')).toHaveCount(0);
+  await page.evaluate(() => (window.__gardenApp as unknown as { toast: (t: string) => void }).toast('Новость из сада'));
+  await expect(page.locator('.toast')).toHaveCount(0);
+  await page.locator('.sheet-close').click();
+  await expect(page.locator('.toast', { hasText: 'Новость из сада' })).toBeVisible();
+});
+
+test('several quests done at once come in one window', async ({ page }) => {
+  await start(page);
+  await page.evaluate(() => {
+    const app = window.__gardenApp as unknown as { showQuestDone: (q: unknown[]) => void };
+    app.showQuestDone([
+      { id: 'a', title: 'Первое', doneText: '', reward: { petals: 3 } },
+      { id: 'b', title: 'Второе', doneText: '', reward: { petals: 4 } },
+    ]);
+  });
+  await expect(page.getByText('Заданий выполнено: 2')).toBeVisible();
+  await expect(page.getByText('+7')).toBeVisible();
+  await page.getByRole('button', { name: 'Дальше!' }).click();
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
 });

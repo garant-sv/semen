@@ -229,6 +229,8 @@ function highlightWord(masked: string, answer: string): string {
 
 /** The hint finger shows up after this much quiet time. */
 const FINGER_AFTER_MS = 8000;
+/** The scene stops its endless animations after this much quiet time (battery, warm phone). */
+const SLEEPY_AFTER_MS = 30_000;
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
@@ -374,14 +376,19 @@ export class App {
 
     $(this.root, '#scene').addEventListener('click', (e) => this.onSceneClick(e));
     this.lastTouchAt = this.now();
+    const wake = () => {
+      this.lastTouchAt = this.now();
+      $(this.root, '#stage').classList.remove('sleepy');
+    };
     this.root.addEventListener(
       'pointerdown',
       () => {
-        this.lastTouchAt = this.now();
+        wake();
         if (this.cache.get('hint')) this.setLayer('hint', $(this.root, '#l-hint'), '');
       },
       { capture: true, passive: true },
     );
+    this.root.addEventListener('keydown', wake, { capture: true, passive: true });
     $(this.root, '#muteBtn').addEventListener('click', () => this.toggleMute());
     // The speaker button: the first tap reads, a tap while Listik reads stops him.
     onVoiceIdle(() => this.markSpeaking(null));
@@ -559,6 +566,9 @@ export class App {
     if (this.awayChanges.length > 60) this.awayChanges = this.awayChanges.slice(-60);
     this.render();
     this.tickGuests(now);
+    // «Sleepy garden»: after a quiet half minute the grass and leaves stop swaying (they kept the
+    // phone busy and warm for nothing); the first touch wakes everything up again.
+    $(this.root, '#stage').classList.toggle('sleepy', now - this.lastTouchAt > SLEEPY_AFTER_MS);
   }
 
   private commit() {
@@ -1152,6 +1162,8 @@ ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p
     const back = $(this.root, '#sheetBackdrop');
     const sheet = $(this.root, '#sheet');
     this.sheetLocked = Boolean(opts.locked);
+    // Messages from before belong to the garden: they must not cover the window's title and «×».
+    $(this.root, '#toasts').replaceChildren();
     sheet.innerHTML = `${this.sheetLocked ? '' : `<button type="button" class="sheet-close" aria-label="Закрыть">${ICONS.close}</button>`}${html}`;
     back.hidden = false;
     this.sheetOnClose = onClose ?? null;
@@ -1811,6 +1823,27 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
       };
       return;
     }
+    if (quests.length > 1) {
+      // Several at once (they were done before they were shown): one window, not four in a row.
+      for (const x of quests.slice(1)) trackQuest(x.id, QUESTS.indexOf(x) + 1 || this.state.questIndex);
+      const petals = quests.reduce((n, x) => n + (x.reward.petals ?? 0), 0);
+      const plants = quests.flatMap((x) => x.reward.plants ?? []);
+      const plots = quests.reduce((n, x) => n + (x.reward.openPlots ?? 0), 0);
+      const chips = [
+        petals ? `<span class="chip">${petalIcon(18)} +${petals}</span>` : '',
+        ...plants.map((p) => `<span class="chip">${plantIcon(p, 3, 26)} ${PLANTS[p].name}</span>`),
+        plots ? `<span class="chip">${plots > 1 ? `Новые грядки: ${plots}` : 'Новая грядка'}</span>` : '',
+      ].join('');
+      play('quest');
+      this.confetti();
+      const sheet = this.openSheet(
+        `<div class="sheet-hero hero-hop">${listik(76)}</div><p class="eyebrow">Заданий выполнено: ${quests.length}</p><h2>Ты молодец!</h2><ul class="plain done-list">${quests.map((x) => `<li>✓ ${x.title}</li>`).join('')}</ul>${chips ? `<div class="chips">${chips}</div>` : ''}<button type="button" class="btn primary wide" data-act="ok">Дальше!</button>`,
+      );
+      $(sheet, '[data-act="ok"]').addEventListener('click', () => this.closeSheet());
+      this.questCollapsed = false;
+      this.tipIndex++;
+      return;
+    }
     const q = quests[0];
     const r = q.reward;
     const chips = [
@@ -1826,7 +1859,6 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
     hop.classList.add('hop');
     const sheet = this.openSheet(
       `<div class="sheet-hero hero-hop">${listik(76)}</div><p class="eyebrow">Задание выполнено</p><h2>${q.title}</h2><p>${q.doneText}</p>${chips ? `<div class="chips">${chips}</div>` : ''}<button type="button" class="btn primary wide" data-act="ok">Дальше!</button>`,
-      quests.length > 1 ? () => window.setTimeout(() => this.showQuestDone(quests.slice(1)), 200) : undefined,
     );
     $(sheet, '[data-act="ok"]').addEventListener('click', () => this.closeSheet());
     this.questCollapsed = false;
@@ -2047,10 +2079,12 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
       this.prepareVoice();
       track('profile', { first, named: Boolean(this.state.profile.nick) });
       this.persist();
+      // 3–5 class: the gardener sheet comes next (and the finished quests after it), so no «let's go» yet.
+      const gardenerNext = gardenerByDefault(this.state) && !this.state.gardener;
+      if (gardenerNext) this.sheetOnClose = null;
       this.closeSheet();
       play('quest');
-      // 3–5 class: the gardener sheet comes next, so no «let's go» yet.
-      if (gardenerByDefault(this.state) && !this.state.gardener) window.setTimeout(() => this.showGardener(true), 350);
+      if (gardenerNext) window.setTimeout(() => this.showGardener(true, then), 350);
       else this.toast(this.state.profile.nick ? `Рад знакомству, ${this.state.profile.nick}!` : 'Отлично, начинаем!');
     });
   }
@@ -2069,14 +2103,41 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
     $(sheet, '[data-act="export"]').addEventListener('click', () => this.doExport());
     $(sheet, '[data-act="yes"]').addEventListener('click', () => {
       const profile = this.state.profile;
-      this.state = newGame(this.now());
-      this.state.profile = profile;
-      this.mode = 'garden';
-      this.selectedDeco = null;
-      this.closeSheet();
-      this.commit();
-      this.toast('Новый сад ждёт тебя!');
+      const next = newGame(this.now());
+      next.profile = profile;
+      this.startOver(next, 'Новый сад ждёт тебя!');
     });
+  }
+
+  /**
+   * A whole new garden (start over, or a backup loaded): forget everything the screen held for the
+   * old one — a guest from a closed zone, a fair problem, a question — and greet it like a fresh start.
+   */
+  private startOver(next: GameState, message: string) {
+    this.sheetOnClose = null;
+    this.closeSheet();
+    this.state = next;
+    this.readOnly = false;
+    this.dismissGuest(false);
+    this.fairTask = null;
+    this.question = null;
+    this.seedsPicking.clear();
+    this.lastPlots = [];
+    this.awayChanges = [];
+    this.mode = 'garden';
+    this.selectedDeco = null;
+    setSoundEnabled(soundOn(next));
+    void this.startTilt(false);
+    this.applyTextSize();
+    this.prepareVoice();
+    setTelemetryGrade(next.profile.grade);
+    advance(this.state, this.now());
+    if (this.view !== 'garden') this.goTo('garden');
+    this.commit();
+    this.homeGardener();
+    this.toast(message);
+    if (!this.state.profile.grade) this.showProfile(true);
+    else if (gardenerByDefault(this.state) && !this.state.gardener) this.showGardener(true);
   }
 
   private showCorruptSheet(error: string) {
@@ -2128,17 +2189,7 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
         const { state } = importSave(text, this.now());
         const found = PLANT_IDS.filter((id) => state.collection[id]).length;
         const sheet = this.openSheet(`<h2>Загрузить копию?</h2><p>В копии: ${petalsWord(state.petals)}, растений в коллекции — ${found}, задание ${Math.min(state.questIndex + 1, QUESTS.length)} из ${QUESTS.length}.</p><p class="muted">Текущий сад будет заменён.</p><button type="button" class="btn primary wide" data-act="yes">Загрузить</button><button type="button" class="btn wide" data-act="no">Отмена</button>`);
-        $(sheet, '[data-act="yes"]').addEventListener('click', () => {
-          this.state = state;
-          setSoundEnabled(soundOn(state));
-          void this.startTilt(false);
-          this.mode = 'garden';
-          this.selectedDeco = null;
-          this.closeSheet();
-          advance(this.state, this.now());
-          this.commit();
-          this.toast('Сад загружен из копии!');
-        });
+        $(sheet, '[data-act="yes"]').addEventListener('click', () => this.startOver(state, 'Сад загружен из копии!'));
         $(sheet, '[data-act="no"]').addEventListener('click', () => this.closeSheet());
       })
       .catch((e: Error) => {
@@ -2175,12 +2226,17 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
   }
 
   toast(text: string, kind: 'info' | 'warn' = 'info') {
+    // Garden news waits for the open window (warnings are about that window, so they show at once).
+    if (kind === 'info' && !$(this.root, '#sheetBackdrop').hidden) {
+      if (!this.pendingNews.includes(text)) this.pendingNews.push(text);
+      return;
+    }
     const box = $(this.root, '#toasts');
     const el = document.createElement('div');
     el.className = `toast ${kind}`;
     el.textContent = text;
     box.appendChild(el);
-    while (box.children.length > 3) box.firstElementChild?.remove();
+    while (box.children.length > 2) box.firstElementChild?.remove();
     window.setTimeout(() => el.classList.add('out'), 3600);
     window.setTimeout(() => el.remove(), 4000);
   }
