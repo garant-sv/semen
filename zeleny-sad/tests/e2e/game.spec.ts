@@ -146,7 +146,7 @@ test('storage failure is reported, not hidden', async ({ page }) => {
   });
   await page.goto('/');
   await expect(page.locator('#banner')).toBeVisible();
-  await expect(page.locator('#banner')).toContainText('Прогресс не сохраняется');
+  await expect(page.locator('#banner')).toContainText('Игра не может запомнить твой сад');
   await shots(page, '05-storage-error');
 });
 

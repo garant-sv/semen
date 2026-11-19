@@ -297,6 +297,7 @@ export function sanitize(raw: Raw, now: number): GameState {
     solved: Array.isArray(quiz.solved) ? [...new Set(quiz.solved.filter((q): q is string => qids.includes(q as string)))] : [],
     correct: Math.floor(num(quiz.correct, 0)),
     asked: Math.floor(num(quiz.asked, 0)),
+    ...(Array.isArray(quiz.recent) ? { recent: quiz.recent.filter((q): q is string => qids.includes(q as string)).slice(-4) } : {}),
   };
 
   const settings = isObj(raw.settings) ? raw.settings : {};

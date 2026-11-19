@@ -108,6 +108,8 @@ export interface GameState {
     solved: string[];
     correct: number;
     asked: number;
+    /** The last questions asked (newest last): a missed one comes back only after a few others. */
+    recent?: string[];
   };
   /** Who is playing: a nickname (stays on the device) and the school class that sets the tasks. */
   profile: { nick: string; grade: Grade | null };
@@ -563,12 +565,25 @@ export function cleanNick(nick: string): string {
 }
 
 /** Pick the next question for the player's class: unsolved ones first. */
+/** How many of the last questions are not asked again. */
+const QUIZ_RECENT = 4;
+
 export function pickQuestion(s: GameState, rand: () => number): Question {
   const g = gradeOf(s);
   const forGrade = QUESTIONS.filter((q) => questionGrades(q).includes(g));
   const all = forGrade.length ? forGrade : QUESTIONS;
   const open = all.filter((q) => !s.quiz.solved.includes(q.id));
-  const pool = open.length ? open : all;
+  const base = open.length ? open : all;
+  const recent = s.quiz.recent ?? [];
+  // Not the same question again right away: skip the last few, as far as there are others left.
+  let pool = base;
+  for (let skip = Math.min(QUIZ_RECENT, recent.length); skip > 0; skip--) {
+    const fresh = base.filter((q) => !recent.slice(-skip).includes(q.id));
+    if (fresh.length) {
+      pool = fresh;
+      break;
+    }
+  }
   return pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))];
 }
 
@@ -579,6 +594,7 @@ export function answerQuiz(s: GameState, id: string, answer: string, now: number
   const petals = correct ? QUIZ_REWARD : QUIZ_TRY_REWARD;
   s.quiz.pending = false;
   s.quiz.asked += 1;
+  s.quiz.recent = [...(s.quiz.recent ?? []).filter((x) => x !== id), id].slice(-QUIZ_RECENT);
   if (correct) {
     s.quiz.correct += 1;
     if (!s.quiz.solved.includes(id)) s.quiz.solved.push(id);
