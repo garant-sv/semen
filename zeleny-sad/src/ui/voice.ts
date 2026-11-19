@@ -124,7 +124,10 @@ export function say(html: string, slow = false): boolean {
   const text = speechText(html);
   if (!text) return false;
   stopSpeaking(false);
-  if (sayRecorded(text)) return true;
+  const fallback = () => {
+    if (!saySynth(text, slow)) idleListener?.();
+  };
+  if (sayRecorded(text, fallback)) return true;
   if (recordedState(text) === 'wait') {
     primeAudio(); // inside the tap, so the sound may start later
     const gen = ++waitGen;
@@ -143,7 +146,7 @@ function finishWaiting(gen: number, loaded: boolean) {
   if (!waiting || waiting.gen !== gen) return; // stopped or replaced meanwhile
   const { text, slow } = waiting;
   waiting = null;
-  if (loaded && sayRecorded(text)) return;
+  if (loaded && sayRecorded(text, () => { if (!saySynth(text, slow)) idleListener?.(); })) return;
   if (!saySynth(text, slow)) idleListener?.();
 }
 

@@ -1,10 +1,10 @@
 /* Service worker for «Зелёный сад». Generated at build time from src/sw/sw-template.js. */
-const VERSION = '3ded61ac9e40';
+const VERSION = '8aec3c748510';
 const CACHE = 'green-garden-' + VERSION;
 const PRECACHE = [
   "./",
-  "./assets/index-CYeXcHBt.js",
   "./assets/index-Cryz2Szt.css",
+  "./assets/index-I-B60Vrb.js",
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -42,6 +42,8 @@ self.addEventListener('message', (event) => {
   if (event.data === 'skipWaiting') self.skipWaiting();
 });
 
+const isHtml = (res) => (res.headers.get('content-type') || '').includes('text/html');
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -56,7 +58,15 @@ self.addEventListener('fetch', (event) => {
         const cached = await cache.match(req, { ignoreSearch: true });
         if (cached) return cached;
         const res = await fetch(req);
-        if (res.ok && res.type === 'basic') await cache.put(req, res.clone());
+        // Never keep a page (the server's fallback) under a voice pack name, and a full disk
+        // must not turn a good answer from the server into an error.
+        if (res.ok && res.type === 'basic' && !isHtml(res)) {
+          try {
+            await cache.put(req, res.clone());
+          } catch {
+            /* no room: play from the network this time */
+          }
+        }
         return res;
       }),
     );
@@ -79,7 +89,9 @@ self.addEventListener('fetch', (event) => {
       const cached = await cache.match(req, { ignoreSearch: true });
       if (cached) return cached;
       const res = await fetch(req);
-      if (res.ok && res.type === 'basic') cache.put(req, res.clone());
+      if (res.ok && res.type === 'basic' && (!isHtml(res) || url.pathname.endsWith('.html'))) {
+        cache.put(req, res.clone()).catch(() => {});
+      }
       return res;
     }),
   );
