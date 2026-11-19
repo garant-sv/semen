@@ -162,7 +162,7 @@ function context(): AudioContext | null {
   }
   try {
     ctx ??= new A();
-    if (ctx.state === 'suspended') void ctx.resume();
+    if (ctx.state !== 'running') void ctx.resume().catch(() => {}); // iOS also has 'interrupted'
     return ctx;
   } catch {
     return null;
@@ -182,7 +182,8 @@ function decode(a: AudioContext, bytes: ArrayBuffer): Promise<AudioBuffer> {
  * piece of it was recorded: then the phone's own voice reads it, so one text never mixes voices.
  * Must be called from a tap (phones only allow sound that the player started).
  */
-export function sayRecorded(text: string): boolean {
+/** `fallback` runs when a recorded piece cannot be decoded (the phone's voice reads it instead). */
+export function sayRecorded(text: string, fallback?: () => void): boolean {
   if (!recordedSupported()) return false;
   const parts = recordedParts(text);
   if (!parts || parts.some((x) => !packs[x.span[0]])) return false;
@@ -213,10 +214,11 @@ export function sayRecorded(text: string): boolean {
       });
     })
     .catch(() => {
-      /* a broken piece: stay silent rather than crash */
+      /* a broken piece: let the phone's voice read it, or stay silent rather than crash */
       if (gen === generation) {
         decoding = -1;
-        onIdle?.();
+        if (fallback) fallback();
+        else onIdle?.();
       }
     });
   return true;

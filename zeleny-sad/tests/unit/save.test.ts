@@ -69,7 +69,43 @@ describe('save & load', () => {
     st.data.set(SAVE_KEY, 'garbage');
     const r = loadGame(st, T0);
     expect(r.status).toBe('corrupt');
-    expect(st.data.get(CORRUPT_KEY_PREFIX + T0)).toBe('garbage');
+    expect(st.data.get(CORRUPT_KEY_PREFIX + 'last')).toBe('garbage');
+    // Opening the game again does not pile up one more copy per launch.
+    loadGame(st, T0 + 1000);
+    expect([...st.data.keys()].filter((k) => k.startsWith(CORRUPT_KEY_PREFIX))).toHaveLength(1);
+  });
+
+  it('keeps the good backup after opening it (the damaged save never becomes the backup)', () => {
+    const st = new MemStorage();
+    const s = newGame(T0);
+    s.petals = 7;
+    saveGame(st, s);
+    s.petals = 8;
+    saveGame(st, s);
+    st.data.set(SAVE_KEY, '{"broken": tru');
+    const r = loadGame(st, T0);
+    expect(r).toMatchObject({ status: 'ok', fromBackup: true });
+    if (r.status !== 'ok') return;
+    r.state.petals = 9;
+    saveGame(st, r.state);
+    expect(JSON.parse(st.getItem(PREV_KEY)!).petals).toBe(7);
+    expect(JSON.parse(st.getItem(SAVE_KEY)!).petals).toBe(9);
+    // And damaged text in the main slot never pushes a good backup out.
+    st.data.set(SAVE_KEY, 'garbage');
+    saveGame(st, r.state);
+    expect(JSON.parse(st.getItem(PREV_KEY)!).petals).toBe(7);
+  });
+
+  it('never overwrites a save made by a newer version of the game', () => {
+    const st = new MemStorage();
+    const newer = JSON.stringify({ ...newGame(T0), version: SAVE_VERSION + 1, petals: 999 });
+    st.data.set(SAVE_KEY, newer);
+    const r = loadGame(st, T0);
+    expect(r.status).toBe('newer');
+    expect([...st.data.keys()].some((k) => k.startsWith(CORRUPT_KEY_PREFIX))).toBe(false);
+    expect(saveGame(st, newGame(T0))).toMatchObject({ ok: false, error: { kind: 'newer' } });
+    expect(st.getItem(SAVE_KEY)).toBe(newer);
+    expect(st.getItem(PREV_KEY)).toBeNull();
   });
 
   it('reports quota and unavailable storage errors', () => {

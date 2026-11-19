@@ -970,3 +970,40 @@ test('garden news wait while a window is open and come after it is closed', asyn
   await page.evaluate(() => (window.__gardenApp as unknown as { announce: (t: string) => void }).announce('Сразу'));
   await expect(page.locator('.toast', { hasText: 'Сразу' })).toHaveCount(1);
 });
+
+test('two windows: the older one stops instead of writing over the garden, and can take over', async ({ page, context }) => {
+  await page.goto('/');
+  await onboard(page);
+  const other = await context.newPage();
+  await other.goto('/');
+  await noGuests(other);
+  // The second window plants a seed and saves: the first one must stop writing.
+  await other.locator('[data-plot="0"]').click();
+  await other.locator('[data-plant="daisy"]').click();
+  await expect(page.getByRole('heading', { name: 'Сад открыт в другом окне' })).toBeVisible();
+  const before = await other.evaluate(() => localStorage.getItem('green-garden/save'));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  expect(await other.evaluate(() => localStorage.getItem('green-garden/save'))).toBe(before);
+  await page.getByRole('button', { name: 'Играть здесь' }).click();
+  // After the reload this window has the other's garden (the daisy) and plays on.
+  await expect(page.locator('[data-plot="0"]')).toHaveClass(/st-/);
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+  await noGuests(page);
+  await page.locator('[data-plot="1"]').click();
+  await page.locator('[data-plant="daisy"]').click();
+  await expect(other.getByRole('heading', { name: 'Сад открыт в другом окне' })).toBeVisible();
+});
+
+test('a save from a newer version of the game is never overwritten', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem('seeded')) {
+      sessionStorage.setItem('seeded', '1');
+      localStorage.setItem('green-garden/save', JSON.stringify({ version: 999, petals: 777 }));
+    }
+  });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Игра обновилась' })).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  expect(JSON.parse((await page.evaluate(() => localStorage.getItem('green-garden/save')))!).petals).toBe(777);
+});
