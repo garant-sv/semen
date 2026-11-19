@@ -1092,3 +1092,19 @@ test('keyboard: a bed opens with Enter, the window takes the focus, Esc closes i
   await expect(page.locator('#sheetBackdrop')).toBeHidden();
   expect(await page.evaluate(() => document.activeElement?.getAttribute('data-plot'))).toBe('0');
 });
+
+test('the voice index comes once, and the numbers for the fair wait until the fair opens', async ({ page }) => {
+  const seen: string[] = [];
+  page.on('request', (r) => {
+    const m = r.url().match(/\/voice\/(voice\.json|pack-[0-9a-f]+\.txt)/);
+    if (m) seen.push(m[1]);
+  });
+  const pack = page.waitForResponse((r) => /\/voice\/pack-[0-9a-f]+\.txt$/.test(r.url()) && r.ok());
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await pack;
+  await page.waitForTimeout(1500);
+  expect(seen.filter((x) => x === 'voice.json')).toHaveLength(1);
+  expect(seen.filter((x) => x.startsWith('pack-'))).toHaveLength(1);
+});

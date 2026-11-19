@@ -133,7 +133,7 @@ export function say(html: string, slow = false): boolean {
     const gen = ++waitGen;
     waiting = { text, gen, slow };
     const timer = window.setTimeout(() => finishWaiting(gen, false), WAIT_FOR_RECORDING_MS);
-    void loadVoicePack().then((ok) => {
+    void loadVoicePack(true).then((ok) => {
       window.clearTimeout(timer);
       finishWaiting(gen, ok);
     });
