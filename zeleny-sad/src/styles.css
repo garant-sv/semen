@@ -3226,3 +3226,12 @@ button.card:active {
     width: 0;
   }
 }
+
+/* «Sleepy garden»: after half a minute without a touch the endless swaying stops (battery, warm phone). */
+.stage.sleepy #scene :not(#l-guest, #l-guest *, #l-hint, #l-hint *, #l-fx, #l-fx *, #l-gardener, #l-gardener *) {
+  animation-play-state: paused !important;
+}
+.done-list li {
+  margin: 4px 0;
+  font-weight: 600;
+}
