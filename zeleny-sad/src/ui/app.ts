@@ -102,7 +102,7 @@ import {
 } from '../game/save';
 import { BADGES, earned, newBadges } from '../game/badges';
 import type { Question } from '../game/quiz';
-import { fairLevel, makeProblem, type MathProblem } from '../game/math';
+import { fairKind, fairLevel, makeProblem, type MathProblem } from '../game/math';
 import { NO_LETTER, RULES, WORDS, viewWord, wordsForGrade, type RuleId } from '../game/russian';
 import {
   ICONS,
@@ -229,6 +229,9 @@ function highlightWord(masked: string, answer: string): string {
 
 /** The hint finger shows up after this much quiet time. */
 const FINGER_AFTER_MS = 8000;
+/** Grades 4–5: the finger helps only in the first quests and waits longer. */
+const FINGER_OLDER_AFTER_MS = 15_000;
+const FINGER_OLDER_QUESTS = 5;
 /** The scene stops its endless animations after this much quiet time (battery, warm phone). */
 const SLEEPY_AFTER_MS = 30_000;
 
@@ -260,6 +263,8 @@ export class App {
   private sheetOnClose: (() => void) | null = null;
   /** The open sheet must be answered: no close button, a tap outside does nothing. */
   private sheetLocked = false;
+  /** Whether the request on the board already had all its flowers (to announce it only once). */
+  private orderWasReady = false;
   /** Where the focus was before a window opened (it goes back there when the window closes). */
   private sheetReturnFocus: HTMLElement | null = null;
   /** Garden news waiting for the open window to close (see announce). */
@@ -606,9 +611,13 @@ export class App {
         this.fx(ringFx(STALL.x, STALL.y - 40, '#FFF3B8', 40));
       }, done.length ? 2200 : 600);
     }
+    // The guest's request is fulfilled: say so once, so the child knows to go to the board.
+    const ready = orderComplete(this.state);
+    if (ready && !this.orderWasReady) window.setTimeout(() => this.announce('Листик: цветов для просьбы хватает! Отнеси их гостю — нажми на доску у ручья.'), 400);
+    this.orderWasReady = ready;
     if (newOrder && this.state.ordersDone === 0) {
       window.setTimeout(() => {
-        this.announce('Листик: на доске у пруда появилась первая просьба от гостя! Загляни.');
+        this.announce('Листик: на доске у ручья появилась первая просьба от гостя! Загляни.');
         this.fx(ringFx(BOARD.x, BOARD.y - 40, '#FFF3B8', 34));
       }, done.length ? 1400 : 300);
     }
@@ -1245,7 +1254,7 @@ ${row('Питомец', PETS.map((p) => btn('pet', p, guestIcon(p, 46), GUESTS[p
       if (!open) {
         return `<div class="card locked" aria-disabled="true">${plantIcon(id, 3, 64, true)}<b>???</b><small>Скоро</small></div>`;
       }
-      return `<button type="button" class="card" data-plant="${id}">${plantIcon(id, 3, 64)}<b>${def.name}</b><small>${def.growSeconds} с · +${def.petals}</small></button>`;
+      return `<button type="button" class="card" data-plant="${id}">${plantIcon(id, 3, 64)}<b>${def.name}</b><small>${formatDuration(def.growSeconds * 1000)} · ${petalIcon(14)} +${def.petals}</small></button>`;
     }).join('');
     const title = { garden: 'Что посадим?', veg: 'Что посадим в огороде?', tundra: 'Что посадим в тундре?', taiga: 'Что посадим в тайге?', steppe: 'Что посадим в степи?' }[area];
     const sheet = this.openSheet(`<h2>${title}</h2><p class="muted">Растение подрастает после каждого полива. Оно не завянет, даже если ты уйдёшь.</p><div class="grid">${cards}</div>`);
@@ -1452,7 +1461,7 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
       .join('');
     const sheet = this.openSheet(`<div class="sheet-hero">${guestIcon(o.from, 96)}</div><p class="eyebrow">Просьба на доске</p><h2>${g.name} просит цветы</h2>
 <ul class="order-items">${items}</ul>
-<p class="muted">Засчитываются цветы, которые ты соберёшь, пока висит просьба. Выполнено просьб: ${s.ordersDone}.</p>
+<p class="muted">Считаются только цветы, собранные после того, как появилась эта просьба. Выполнено просьб: ${s.ordersDone}.</p>
 <div class="price">${petalIcon(24)}<b>+${o.reward}</b><span class="muted">награда</span></div>
 <button type="button" class="btn primary wide" data-act="claim" ${done ? '' : 'disabled'}>${done ? 'Отдать цветы' : 'Пока не хватает цветов'}</button>`);
     $(sheet, '[data-act="claim"]').addEventListener('click', () => {
@@ -1525,7 +1534,8 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     const v = viewWord(w);
     play('tap');
     if (sign.solved) {
-      this.toast(`«${v.full}» — ${RULES[w.rule].toLowerCase()}. ${w.why}`);
+      // The explanation already names the word, so it is not said twice.
+      this.toast(w.why.toLowerCase().includes(v.full.toLowerCase()) ? w.why : `«${v.full}». ${w.why}`);
       return;
     }
     const options = [...w.options].sort(() => Math.random() - 0.5);
@@ -1571,13 +1581,13 @@ ${enough ? '' : `<p class="muted center">Не хватает ${petalsWord(def.pr
     play('tap');
     const level = fairLevel(s.fair.solved, gradeOf(s), s.fair.ease);
     if (s.fair.queue <= 0) {
-      this.openSheet(`<div class="sheet-hero">${listik(64)}</div><p class="eyebrow">Ярмарка урожая · уровень ${level}</p><h2>Покупателей пока нет</h2><p>Следующий придёт через ${Math.ceil(nextCustomerIn(s, now) / 1000)} с. А пока можно поливать и собирать урожай!</p><p class="muted">Решено задач: ${s.fair.solved}, с первой попытки: ${s.fair.firstTry}.</p>`);
+      this.openSheet(`<div class="sheet-hero">${listik(64)}</div><p class="eyebrow">Ярмарка урожая · уровень ${level}</p><h2>Покупателей пока нет</h2><p>Следующий придёт через ${formatDuration(nextCustomerIn(s, now), true)}. А пока можно поливать и собирать урожай!</p><p class="muted">Решено задач: ${s.fair.solved}, с первой попытки: ${s.fair.firstTry}.</p>`);
       return;
     }
     if (!this.fairTask) {
       const pool = GUEST_IDS.filter((id) => GUESTS[id].area === 'garden' || s.guests[id]);
       const guest = pool[Math.floor(Math.random() * pool.length)];
-      this.fairTask = { guest, problem: makeProblem(level, Math.random, GUESTS[guest].name, undefined, gradeOf(s)), tries: 0, hinted: false };
+      this.fairTask = { guest, problem: makeProblem(level, Math.random, GUESTS[guest].name, fairKind(s.fair.solved, gradeOf(s)), gradeOf(s)), tries: 0, hinted: false };
     }
     // Tries and the hint belong to this customer: closing and reopening the window keeps them.
     const task = this.fairTask;
@@ -1999,8 +2009,11 @@ ${youngMode(s) && p.pic ? fairPicHTML(p.pic) : ''}
    */
   private fingerHint(now: number): string {
     const s = this.state;
-    if (!youngMode(s) || this.mode !== 'garden' || !$(this.root, '#sheetBackdrop').hidden) return '';
-    if (now - this.lastTouchAt < FINGER_AFTER_MS) return '';
+    if (this.mode !== 'garden' || !$(this.root, '#sheetBackdrop').hidden) return '';
+    // Grades 2–3 get the finger all the time; older children only in the first quests and after a longer pause.
+    const young = youngMode(s);
+    if (!young && s.questIndex >= FINGER_OLDER_QUESTS) return '';
+    if (now - this.lastTouchAt < (young ? FINGER_AFTER_MS : FINGER_OLDER_AFTER_MS)) return '';
     const i = nextTap(s, now, this.view);
     if (i === null) return '';
     const pos = plotPos(i);
