@@ -101,7 +101,7 @@ self.addEventListener('fetch', (event) => {
       const cached = await cache.match(req, { ignoreSearch: true });
       if (cached) return cached;
       const res = await fetch(req);
-      if (res.ok && res.type === 'basic' && (!isHtml(res) || url.pathname.endsWith('.html'))) {
+      if (res.ok && res.type === 'basic' && (!isHtml(res) || url.pathname.endsWith('/index.html'))) {
         cache.put(req, res.clone()).catch(() => {});
       }
       return res;

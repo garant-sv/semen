@@ -84,7 +84,8 @@ function writeQueue(q: Ev[]) {
   }
 }
 
-const clip = (v: unknown, n = 160) => String(v ?? '').replace(/\s+/g, ' ').slice(0, n);
+// By whole characters: half of an emoji would be a broken string in the journal.
+const clip = (v: unknown, n = 160) => Array.from(String(v ?? '').replace(/\s+/g, ' ')).slice(0, n).join('');
 
 export function setTelemetryGrade(g: number | null) {
   grade = g;
