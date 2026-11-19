@@ -32,7 +32,7 @@ import {
   type Quest,
   type Stage,
 } from './data';
-import { FAIR_EASE_AFTER_MISSES, FAIR_EVERY_SEC, FAIR_FROM_QUEST, FAIR_HARDER_AFTER_STREAK, FAIR_QUEUE, fairLevel } from './math';
+import { FAIR_EASE_AFTER_MISSES, FAIR_EVERY_SEC, FAIR_FROM_QUEST, FAIR_HARDER_AFTER_STREAK, FAIR_QUEUE, fairLevel, plural } from './math';
 import { RUS_FROM_QUEST, RUS_REWARD, RUS_TRY_REWARD, WORDS, viewWord, wordsForGrade } from './russian';
 import { QUESTIONS, QUIZ_EVERY, QUIZ_FROM_QUEST, QUIZ_REWARD, QUIZ_TRY_REWARD, questionGrades, type Grade, type Question } from './quiz';
 
@@ -745,9 +745,12 @@ export function gardenProgress(s: GameState): number {
   return Math.min(1, landmarks * 0.6 + collection * 0.4);
 }
 
-export function formatDuration(ms: number): string {
-  const total = Math.ceil(ms / 1000);
+/** «4 секунды», «1 минута 5 секунд» (after «через»: «1 минуту»): a child reads words more easily than «0:04». */
+export function formatDuration(ms: number, after = false): string {
+  const total = Math.max(1, Math.ceil(ms / 1000));
   const m = Math.floor(total / 60);
   const sec = total % 60;
-  return `${m}:${String(sec).padStart(2, '0')}`;
+  const mins = m ? `${m} ${plural(m, [after ? 'минуту' : 'минута', 'минуты', 'минут'])}` : '';
+  const secs = sec ? `${sec} ${plural(sec, [after ? 'секунду' : 'секунда', 'секунды', 'секунд'])}` : '';
+  return [mins, secs].filter(Boolean).join(' ');
 }
