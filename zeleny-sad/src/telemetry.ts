@@ -146,9 +146,21 @@ export async function flush() {
         n++;
         if (next.length > MAX_URL) break; // a single huge event goes alone (it was clipped)
       }
-      const res = await fetch(url, { method: 'GET', cache: 'no-store', credentials: 'omit', keepalive: true });
-      if (!res.ok) break;
-      writeQueue(readQueue().slice(n));
+      // Take the batch out of the queue before sending. On iPhone the game is often frozen right
+      // after the request leaves (keepalive still delivers it), and trimming afterwards never ran,
+      // so the next launch sent the same events again. On a failed request the batch goes back.
+      const batch = q.slice(0, n);
+      writeQueue(q.slice(n));
+      let ok = false;
+      try {
+        ok = (await fetch(url, { method: 'GET', cache: 'no-store', credentials: 'omit', keepalive: true })).ok;
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        writeQueue([...batch, ...readQueue()]);
+        break;
+      }
     }
   } catch {
     /* offline or blocked: try later */
