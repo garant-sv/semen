@@ -32,7 +32,7 @@ import {
   type Quest,
   type Stage,
 } from './data';
-import { FAIR_EASE_AFTER_MISSES, FAIR_EVERY_SEC, FAIR_FROM_QUEST, FAIR_HARDER_AFTER_STREAK, FAIR_QUEUE, fairLevel } from './math';
+import { FAIR_EASE_AFTER_MISSES, FAIR_EVERY_SEC, FAIR_FROM_QUEST, FAIR_HARDER_AFTER_STREAK, FAIR_QUEUE, fairLevel, plural } from './math';
 import { RUS_FROM_QUEST, RUS_REWARD, RUS_TRY_REWARD, WORDS, viewWord, wordsForGrade } from './russian';
 import { QUESTIONS, QUIZ_EVERY, QUIZ_FROM_QUEST, QUIZ_REWARD, QUIZ_TRY_REWARD, questionGrades, type Grade, type Question } from './quiz';
 
@@ -108,6 +108,8 @@ export interface GameState {
     solved: string[];
     correct: number;
     asked: number;
+    /** The last questions asked (newest last): a missed one comes back only after a few others. */
+    recent?: string[];
   };
   /** Who is playing: a nickname (stays on the device) and the school class that sets the tasks. */
   profile: { nick: string; grade: Grade | null };
@@ -428,7 +430,9 @@ export function newOrder(s: GameState, rand: () => number): Order {
     return { plant, need: Math.max(1, Math.ceil(rand() * (kinds === 2 ? Math.min(2, max) : max))), have: 0 };
   });
   const value = items.reduce((sum, it) => sum + PLANTS[it.plant].petals * it.need, 0);
-  return { from: pick(GUEST_IDS), items, reward: Math.ceil(value * 0.6) + 3 };
+  // Guests of the home garden, and those from far places only once the child has met them there.
+  const from = GUEST_IDS.filter((id) => GUESTS[id].area === 'garden' || s.guests[id]);
+  return { from: pick(from.length ? from : GUEST_IDS), items, reward: Math.ceil(value * 0.6) + 3 };
 }
 
 /** Make sure there is an order on the board once orders are unlocked. Returns true if a new one appeared. */
@@ -563,12 +567,27 @@ export function cleanNick(nick: string): string {
 }
 
 /** Pick the next question for the player's class: unsolved ones first. */
+/** How many of the last questions are not asked again. */
+const QUIZ_RECENT = 4;
+
 export function pickQuestion(s: GameState, rand: () => number): Question {
   const g = gradeOf(s);
   const forGrade = QUESTIONS.filter((q) => questionGrades(q).includes(g));
   const all = forGrade.length ? forGrade : QUESTIONS;
   const open = all.filter((q) => !s.quiz.solved.includes(q.id));
-  const pool = open.length ? open : all;
+  const base = open.length ? open : all;
+  const recent = s.quiz.recent ?? [];
+  // Not the same question again right away: skip the last few, as far as there are others left.
+  // When only one or two unsolved questions remain, a solved one comes in between.
+  const notRecent = (list: Question[]) => list.filter((q) => !recent.slice(-QUIZ_RECENT).includes(q.id));
+  let pool = notRecent(base).length ? notRecent(base) : notRecent(all).length ? notRecent(all) : base;
+  if (pool === base) for (let skip = Math.min(QUIZ_RECENT, recent.length); skip > 0; skip--) {
+    const fresh = base.filter((q) => !recent.slice(-skip).includes(q.id));
+    if (fresh.length) {
+      pool = fresh;
+      break;
+    }
+  }
   return pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))];
 }
 
@@ -579,6 +598,7 @@ export function answerQuiz(s: GameState, id: string, answer: string, now: number
   const petals = correct ? QUIZ_REWARD : QUIZ_TRY_REWARD;
   s.quiz.pending = false;
   s.quiz.asked += 1;
+  s.quiz.recent = [...(s.quiz.recent ?? []).filter((x) => x !== id), id].slice(-QUIZ_RECENT);
   if (correct) {
     s.quiz.correct += 1;
     if (!s.quiz.solved.includes(id)) s.quiz.solved.push(id);
@@ -745,9 +765,12 @@ export function gardenProgress(s: GameState): number {
   return Math.min(1, landmarks * 0.6 + collection * 0.4);
 }
 
-export function formatDuration(ms: number): string {
-  const total = Math.ceil(ms / 1000);
+/** «4 секунды», «1 минута 5 секунд» (after «через»: «1 минуту»): a child reads words more easily than «0:04». */
+export function formatDuration(ms: number, after = false): string {
+  const total = Math.max(1, Math.ceil(ms / 1000));
   const m = Math.floor(total / 60);
   const sec = total % 60;
-  return `${m}:${String(sec).padStart(2, '0')}`;
+  const mins = m ? `${m} ${plural(m, [after ? 'минуту' : 'минута', 'минуты', 'минут'])}` : '';
+  const secs = sec ? `${sec} ${plural(sec, [after ? 'секунду' : 'секунда', 'секунды', 'секунд'])}` : '';
+  return [mins, secs].filter(Boolean).join(' ');
 }

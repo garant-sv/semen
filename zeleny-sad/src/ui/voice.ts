@@ -133,7 +133,10 @@ export function say(html: string, slow = false): boolean {
     const gen = ++waitGen;
     waiting = { text, gen, slow };
     const timer = window.setTimeout(() => finishWaiting(gen, false), WAIT_FOR_RECORDING_MS);
-    void loadVoicePack().then((ok) => {
+    // The first part first; the fair's numbers only if this very text needs them.
+    void loadVoicePack()
+      .then((ok) => (ok && recordedState(text) === 'wait' ? loadVoicePack(true) : ok))
+      .then((ok) => {
       window.clearTimeout(timer);
       finishWaiting(gen, ok);
     });

@@ -1,7 +1,8 @@
 import './styles.css';
 import { getStorage } from './game/save';
 import { App } from './ui/app';
-import { installTelemetry } from './telemetry';
+import { flush, installTelemetry, track } from './telemetry';
+import { noServiceWorker } from './ui/voice-pack';
 
 installTelemetry();
 const root = document.getElementById('app')!;
@@ -12,6 +13,9 @@ try {
 } catch (e) {
   // Never a blank page: say what happened, and keep the update below working so a fix can arrive.
   console.error(e);
+  // A failed start must show up in the journal: it may be a bad release that hits every child.
+  track('error', { msg: `boot: ${(e as Error)?.message ?? e}`, at: 'main' });
+  void flush();
   root.innerHTML =
     '<div style="font:18px/1.45 system-ui,sans-serif;color:#3E6B35;text-align:center;padding:30vh 24px 0">' +
     '<p>Ой! Сад не открылся. Твой сад сохранён.</p><p>Закрой игру и открой её снова через минуту.</p>' +
@@ -69,7 +73,12 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
           if (document.visibilityState === 'visible') void reg.update().catch(() => undefined);
         });
       })
-      .catch(() => app?.toast('Офлайн-режим недоступен в этом браузере.', 'warn'));
+      .catch((e: unknown) => {
+        noServiceWorker();
+        // Only when the browser forbids it (private mode, a policy). A network hiccup is retried
+        // on its own the next time the game opens, and a child need not hear about it.
+        if (e instanceof DOMException && e.name === 'SecurityError') app?.toast('Без интернета игра в этом браузере не откроется.', 'warn');
+      });
   });
 }
 

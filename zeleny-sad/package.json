@@ -1,7 +1,7 @@
 {
   "name": "green-garden-pwa",
   "private": true,
-  "version": "0.8.0-dev.19",
+  "version": "0.8.0-dev.27",
   "description": "Зелёный сад — уютная детская PWA-игра о восстановлении волшебного сада",
   "type": "module",
   "scripts": {

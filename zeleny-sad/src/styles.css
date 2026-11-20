@@ -3226,3 +3226,148 @@ button.card:active {
     width: 0;
   }
 }
+
+/* «Sleepy garden»: after half a minute without a touch the endless swaying stops (battery, warm phone). */
+.stage.sleepy #scene :not(#l-guest, #l-guest *, #l-hint, #l-hint *, #l-fx, #l-fx *, #l-gardener, #l-gardener *) {
+  animation-play-state: paused !important;
+}
+.done-list li {
+  margin: 4px 0;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------ round 1 of the design review */
+
+/* Confetti fly under the windows (the reward text stays readable); petals to the counter stay on top. */
+.confetti-layer {
+  z-index: 19;
+}
+
+/* Phones turned sideways: the garden would be the size of a stamp, so ask to turn it back. */
+.rotate-hint {
+  display: none;
+}
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  .rotate-hint {
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 8px;
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: var(--cream);
+    color: var(--green-dark);
+    font: 800 22px/1.3 var(--font);
+    text-align: center;
+    padding: 24px;
+  }
+  .rotate-hint p {
+    margin: 0;
+  }
+}
+
+/* Computers and tablets: one comfortable column instead of a lawn stretched over 1280 px. */
+@media (min-width: 900px) {
+  #app {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+}
+
+/* Garden messages sit at the top of the scene (they live inside it), not over the bottom row of beds. */
+.stage .toasts {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: auto;
+  top: 10px;
+}
+#app:has(.sheet-backdrop:not([hidden])) .stage .toasts {
+  position: fixed;
+  top: calc(var(--safe-top) + 10px);
+  left: 64px;
+  right: 64px;
+}
+
+/* A locked tab looks locked, not broken (and its text stays readable). */
+.nav button.dim {
+  opacity: 1;
+  color: var(--ink-soft);
+  position: relative;
+}
+.nav button.dim::after {
+  content: '🔒';
+  position: absolute;
+  top: 2px;
+  right: calc(50% - 26px);
+  font-size: 11px;
+}
+.tab span {
+  opacity: 1;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* Gardener: «В сад!» stays on screen on small phones, like «Начать играть!» in the first window. */
+.gardener-sheet .gd-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 16px -18px 0;
+  padding: 12px 18px 4px;
+  background: linear-gradient(rgba(255, 246, 227, 0), var(--cream) 14px);
+  align-items: stretch;
+}
+.gardener-sheet .gd-actions .btn {
+  min-height: 60px;
+  margin-top: 0;
+}
+@media (max-height: 700px) {
+  .gardener-sheet .gd-preview {
+    max-height: 120px;
+  }
+}
+/* Cover the sheet's bottom padding too, so nothing peeks out under the buttons. */
+.gardener-sheet .gd-actions::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: calc(var(--safe-bottom) + 24px);
+  background: var(--cream);
+}
+
+/* ------------------------------------------------------------ accessibility review */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* Keyboard focus on the beds, signs and seeds of the scene. */
+#scene [role='button']:focus {
+  outline: none;
+}
+#scene [role='button']:focus-visible {
+  outline: 3px solid #1f5fbf;
+  outline-offset: 2px;
+}
+.sheet h2:focus {
+  outline: none;
+}
+/* The active menu item: 5.6:1 instead of 4.3:1. */
+.nav button.active {
+  color: #336630;
+}
+
+/* Decorations that cost more than the child has: say how much is missing. */
+.card.deco .need {
+  display: block;
+  margin-top: 4px;
+  color: #8a5a2b;
+  font-weight: 600;
+}

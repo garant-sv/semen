@@ -123,6 +123,8 @@ test('backup export and import', async ({ page }) => {
   // Start over, then restore the backup.
   await page.getByRole('button', { name: 'Начать сад заново' }).click();
   await page.getByRole('button', { name: 'Да, начать заново' }).click();
+  // A new garden of a 3–5 class child starts like the first one: with a gardener.
+  await makeGardener(page);
   await expect(page.locator('.quest-title')).toContainText('Задание 1 из 18');
 
   await page.locator('#importFile').setInputFiles(path);
@@ -144,7 +146,7 @@ test('storage failure is reported, not hidden', async ({ page }) => {
   });
   await page.goto('/');
   await expect(page.locator('#banner')).toBeVisible();
-  await expect(page.locator('#banner')).toContainText('Прогресс не сохраняется');
+  await expect(page.locator('#banner')).toContainText('Игра не может запомнить твой сад');
   await shots(page, '05-storage-error');
 });
 
@@ -313,7 +315,7 @@ test('guests can be met; requests on the board can be fulfilled', async ({ page 
   await expect(page.locator('#petals')).toHaveText(String(9 + 6 + 7), { timeout: 5000 });
 
   await page.getByRole('button', { name: 'Коллекция' }).click();
-  await page.getByRole('button', { name: /Гости/ }).click();
+  await page.getByRole('tab', { name: /Гости/ }).click();
   await expect(page.locator('.card.book').filter({ hasText: 'Лягушка' })).toBeVisible();
   await expect(page.locator('.card.book.locked')).toHaveCount(14); // 15 guests, 1 met
   await shots(page, '10-guests');
@@ -1038,4 +1040,71 @@ test('fair: letters get a word of help, a hint then a right answer is not «the 
   await page.locator('.answer-input').fill(String(answer));
   await page.getByRole('button', { name: 'Проверить' }).click();
   await expect(page.getByText(/Верно, с подсказкой!/)).toBeVisible();
+});
+
+test('a quiet garden stops swaying after half a minute and wakes up on a touch', async ({ page }) => {
+  await start(page);
+  await expect(page.locator('#stage')).not.toHaveClass(/sleepy/);
+  await page.clock.runFor(31_000);
+  await expect(page.locator('#stage')).toHaveClass(/sleepy/);
+  await page.mouse.click(5, 5);
+  await expect(page.locator('#stage')).not.toHaveClass(/sleepy/);
+});
+
+test('messages never cover a window, and garden news waits for it', async ({ page }) => {
+  await start(page);
+  await page.evaluate(() => (window.__gardenApp as unknown as { toast: (t: string) => void }).toast('Старая новость'));
+  await expect(page.locator('.toast')).toHaveCount(1);
+  await page.locator('[data-plot="0"]').click();
+  await expect(page.getByRole('heading', { name: 'Что посадим?' })).toBeVisible();
+  await expect(page.locator('.toast')).toHaveCount(0);
+  await page.evaluate(() => (window.__gardenApp as unknown as { toast: (t: string) => void }).toast('Новость из сада'));
+  await expect(page.locator('.toast')).toHaveCount(0);
+  await page.locator('.sheet-close').click();
+  await expect(page.locator('.toast', { hasText: 'Новость из сада' })).toBeVisible();
+});
+
+test('several quests done at once come in one window', async ({ page }) => {
+  await start(page);
+  await page.evaluate(() => {
+    const app = window.__gardenApp as unknown as { showQuestDone: (q: unknown[]) => void };
+    app.showQuestDone([
+      { id: 'a', title: 'Первое', doneText: '', reward: { petals: 3 } },
+      { id: 'b', title: 'Второе', doneText: '', reward: { petals: 4 } },
+    ]);
+  });
+  await expect(page.getByText('Заданий выполнено: 2')).toBeVisible();
+  await expect(page.getByText('+7')).toBeVisible();
+  await page.getByRole('button', { name: 'Дальше!' }).click();
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+});
+
+test('keyboard: a bed opens with Enter, the window takes the focus, Esc closes it and the focus comes back', async ({ page }) => {
+  await start(page);
+  const bed = page.locator('[data-plot="0"]');
+  await bed.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Что посадим?' })).toBeVisible();
+  expect(await page.evaluate(() => document.activeElement?.id)).toBe('sheetTitle');
+  // The garden behind the window cannot be reached.
+  expect(await page.evaluate(() => (document.querySelector('#stage') as HTMLElement).inert)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sheetBackdrop')).toBeHidden();
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('data-plot'))).toBe('0');
+});
+
+test('the voice index comes once, and the numbers for the fair wait until the fair opens', async ({ page }) => {
+  const seen: string[] = [];
+  page.on('request', (r) => {
+    const m = r.url().match(/\/voice\/(voice\.json|pack-[0-9a-f]+\.txt)/);
+    if (m) seen.push(m[1]);
+  });
+  const pack = page.waitForResponse((r) => /\/voice\/pack-[0-9a-f]+\.txt$/.test(r.url()) && r.ok());
+  await page.goto('/');
+  await page.getByRole('button', { name: /^2\s*класс/ }).click();
+  await page.getByRole('button', { name: 'Начать играть!' }).click();
+  await pack;
+  await page.waitForTimeout(1500);
+  expect(seen.filter((x) => x === 'voice.json')).toHaveLength(1);
+  expect(seen.filter((x) => x.startsWith('pack-'))).toHaveLength(1);
 });

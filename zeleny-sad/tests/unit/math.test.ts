@@ -163,3 +163,53 @@ describe('fair queue', () => {
     expect(state.fair).toEqual({ queue: 0, lastAt: 0, solved: 0, firstTry: 0, ease: 0, misses: 0, streak: 0 });
   });
 });
+
+describe('clarity helpers', () => {
+  it('time is said in words and the first fair customers bring simple purchases', async () => {
+    const { formatDuration } = await import('../../src/game/state');
+    const { fairKind } = await import('../../src/game/math');
+    expect(formatDuration(4000)).toBe('4 секунды');
+    expect(formatDuration(65_000)).toBe('1 минута 5 секунд');
+    expect(formatDuration(61_000, true)).toBe('1 минуту 1 секунду');
+    expect(formatDuration(120_000)).toBe('2 минуты');
+    expect(formatDuration(0)).toBe('1 секунда');
+    expect(fairKind(0, 4)).toBe('cost');
+    expect(fairKind(2, 2)).toBe('cost');
+    expect(fairKind(3, 4)).toBeUndefined();
+  });
+});
+
+describe('Listik questions', () => {
+  it('a question is not asked again among the next few', async () => {
+    const { pickQuestion, answerQuiz } = await import('../../src/game/state');
+    const s = newGame(T0);
+    s.profile.grade = 3;
+    const rand = seeded(9);
+    const asked: string[] = [];
+    for (let i = 0; i < 40; i++) {
+      const q = pickQuestion(s, rand);
+      expect(asked.slice(-4)).not.toContain(q.id);
+      asked.push(q.id);
+      answerQuiz(s, q.id, 'неверно', T0); // always wrong: nothing is «solved»
+    }
+  });
+});
+
+describe('Listik questions, the last unsolved one', () => {
+  it('does not come twice in a row when the others are solved', async () => {
+    const { pickQuestion, answerQuiz, gradeOf } = await import('../../src/game/state');
+    const { QUESTIONS, questionGrades } = await import('../../src/game/quiz');
+    const s = newGame(T0);
+    s.profile.grade = 3;
+    const mine = QUESTIONS.filter((q) => questionGrades(q).includes(gradeOf(s)));
+    s.quiz.solved = mine.slice(1).map((q) => q.id);
+    const rand = seeded(4);
+    let last = '';
+    for (let i = 0; i < 20; i++) {
+      const q = pickQuestion(s, rand);
+      expect(q.id).not.toBe(last);
+      last = q.id;
+      answerQuiz(s, q.id, 'неверно', T0);
+    }
+  });
+});

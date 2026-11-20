@@ -101,10 +101,16 @@ const UNIT_FORMS: Record<string, [string, string, string]> = {
   цветов: ['цветок', 'цветка', 'цветов'],
 };
 
+/** The first customers bring one-step purchases («по 3 лепестка, 4 штуки»), so the fair starts easy. */
+export const FAIR_EASY_FIRST = 3;
+export const fairKind = (solved: number, grade: number): MathKind | undefined =>
+  solved < FAIR_EASY_FIRST && (KINDS_BY_GRADE[grade] ?? KINDS_BY_GRADE[4]).includes('cost') ? 'cost' : undefined;
+
 export function makeProblem(level: number, rand: () => number, who: string, kind?: MathKind, grade = 4): MathProblem {
   let k = kind;
   if (!k) {
-    const allowed = KINDS_BY_LEVEL[Math.max(1, Math.min(4, level))].filter((x) => (KINDS_BY_GRADE[grade] ?? KINDS_BY_GRADE[4]).includes(x));
+    // 2nd grade has one level and its own easy set (perimeter too); older classes grow by level.
+    const allowed = grade === 2 ? KINDS_BY_GRADE[2] : KINDS_BY_LEVEL[Math.max(1, Math.min(4, level))].filter((x) => (KINDS_BY_GRADE[grade] ?? KINDS_BY_GRADE[4]).includes(x));
     const list = allowed.length ? allowed : KINDS_BY_GRADE[grade] ?? KINDS_BY_LEVEL[1];
     k = list[Math.min(list.length - 1, Math.floor(rand() * list.length))];
   }
@@ -194,8 +200,11 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
   };
   /** Sides of a bed: a digit by a digit, or a digit by round tens. */
   const sides = (): [number, number] => {
-    if (L === 1) return [int(2, 6), int(2, 6)];
-    if (L === 2) return [int(3, 9), int(3, 9)];
+    // As in the textbook: the length is never shorter than the width.
+    const long = (x: number, y: number): [number, number] => (x >= y ? [x, y] : [y, x]);
+    if (L === 1) return long(int(2, 6), int(2, 6));
+    if (L === 2) return long(int(3, 9), int(3, 9));
+    // TODO with the next voice recording: tens first (the length), as for small beds.
     return [int(2, 9), L === 3 ? tens(1, 5) : tens(2, 9)];
   };
 
@@ -305,7 +314,7 @@ function buildProblem(level: number, rand: () => number, who: string, kind?: Mat
     }
     case 'minutes': {
       const h = L === 1 ? int(1, 2) : int(1, 5);
-      const m = int(0, 11) * 5;
+      const m = int(1, 11) * 5; // never «2 ч 0 мин»
       return {
         kind: k,
         text: `${who}: «Дорога до ярмарки заняла ${h} ч ${m} мин. Сколько это всего минут?»`,
