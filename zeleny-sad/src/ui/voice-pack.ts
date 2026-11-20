@@ -141,10 +141,19 @@ export function loadVoicePack(all = false, base = 'voice/'): Promise<boolean> {
 }
 
 /** On the very first start the service worker takes over a moment later: wait for it (at most 15 s). */
+let noWorker = false;
+const workerWaiters: (() => void)[] = [];
+/** The service worker could not be registered (private mode, a policy): download directly, without waiting. */
+export function noServiceWorker() {
+  noWorker = true;
+  workerWaiters.splice(0).forEach((f) => f());
+}
+
 function serviceWorkerReady(): Promise<void> {
   const sw = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined;
-  if (!sw || sw.controller) return Promise.resolve();
+  if (!sw || sw.controller || noWorker) return Promise.resolve();
   return new Promise((resolve) => {
+    workerWaiters.push(resolve);
     const timer = window.setTimeout(resolve, 15_000);
     sw.addEventListener(
       'controllerchange',

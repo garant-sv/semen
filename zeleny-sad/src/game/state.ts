@@ -430,7 +430,9 @@ export function newOrder(s: GameState, rand: () => number): Order {
     return { plant, need: Math.max(1, Math.ceil(rand() * (kinds === 2 ? Math.min(2, max) : max))), have: 0 };
   });
   const value = items.reduce((sum, it) => sum + PLANTS[it.plant].petals * it.need, 0);
-  return { from: pick(GUEST_IDS), items, reward: Math.ceil(value * 0.6) + 3 };
+  // Guests of the home garden, and those from far places only once the child has met them there.
+  const from = GUEST_IDS.filter((id) => GUESTS[id].area === 'garden' || s.guests[id]);
+  return { from: pick(from.length ? from : GUEST_IDS), items, reward: Math.ceil(value * 0.6) + 3 };
 }
 
 /** Make sure there is an order on the board once orders are unlocked. Returns true if a new one appeared. */
@@ -576,8 +578,10 @@ export function pickQuestion(s: GameState, rand: () => number): Question {
   const base = open.length ? open : all;
   const recent = s.quiz.recent ?? [];
   // Not the same question again right away: skip the last few, as far as there are others left.
-  let pool = base;
-  for (let skip = Math.min(QUIZ_RECENT, recent.length); skip > 0; skip--) {
+  // When only one or two unsolved questions remain, a solved one comes in between.
+  const notRecent = (list: Question[]) => list.filter((q) => !recent.slice(-QUIZ_RECENT).includes(q.id));
+  let pool = notRecent(base).length ? notRecent(base) : notRecent(all).length ? notRecent(all) : base;
+  if (pool === base) for (let skip = Math.min(QUIZ_RECENT, recent.length); skip > 0; skip--) {
     const fresh = base.filter((q) => !recent.slice(-skip).includes(q.id));
     if (fresh.length) {
       pool = fresh;
