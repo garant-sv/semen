@@ -109,7 +109,8 @@ export const fairKind = (solved: number, grade: number): MathKind | undefined =>
 export function makeProblem(level: number, rand: () => number, who: string, kind?: MathKind, grade = 4): MathProblem {
   let k = kind;
   if (!k) {
-    const allowed = KINDS_BY_LEVEL[Math.max(1, Math.min(4, level))].filter((x) => (KINDS_BY_GRADE[grade] ?? KINDS_BY_GRADE[4]).includes(x));
+    // 2nd grade has one level and its own easy set (perimeter too); older classes grow by level.
+    const allowed = grade === 2 ? KINDS_BY_GRADE[2] : KINDS_BY_LEVEL[Math.max(1, Math.min(4, level))].filter((x) => (KINDS_BY_GRADE[grade] ?? KINDS_BY_GRADE[4]).includes(x));
     const list = allowed.length ? allowed : KINDS_BY_GRADE[grade] ?? KINDS_BY_LEVEL[1];
     k = list[Math.min(list.length - 1, Math.floor(rand() * list.length))];
   }

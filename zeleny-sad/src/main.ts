@@ -2,6 +2,7 @@ import './styles.css';
 import { getStorage } from './game/save';
 import { App } from './ui/app';
 import { flush, installTelemetry, track } from './telemetry';
+import { noServiceWorker } from './ui/voice-pack';
 
 installTelemetry();
 const root = document.getElementById('app')!;
@@ -73,6 +74,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
         });
       })
       .catch((e: unknown) => {
+        noServiceWorker();
         // Only when the browser forbids it (private mode, a policy). A network hiccup is retried
         // on its own the next time the game opens, and a child need not hear about it.
         if (e instanceof DOMException && e.name === 'SecurityError') app?.toast('Без интернета игра в этом браузере не откроется.', 'warn');

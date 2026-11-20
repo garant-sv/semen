@@ -194,3 +194,22 @@ describe('Listik questions', () => {
     }
   });
 });
+
+describe('Listik questions, the last unsolved one', () => {
+  it('does not come twice in a row when the others are solved', async () => {
+    const { pickQuestion, answerQuiz, gradeOf } = await import('../../src/game/state');
+    const { QUESTIONS, questionGrades } = await import('../../src/game/quiz');
+    const s = newGame(T0);
+    s.profile.grade = 3;
+    const mine = QUESTIONS.filter((q) => questionGrades(q).includes(gradeOf(s)));
+    s.quiz.solved = mine.slice(1).map((q) => q.id);
+    const rand = seeded(4);
+    let last = '';
+    for (let i = 0; i < 20; i++) {
+      const q = pickQuestion(s, rand);
+      expect(q.id).not.toBe(last);
+      last = q.id;
+      answerQuiz(s, q.id, 'неверно', T0);
+    }
+  });
+});
